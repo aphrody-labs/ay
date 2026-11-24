@@ -1,24 +1,22 @@
 # ay
 
-Rust workspace that links upstream crates from `vendor/zed`, `vendor/gpui-kit`, `vendor/bun`, `vendor/blitz`, `vendor/dioxus`, `vendor/cloudflare-os`, `vendor/kitesurf`, `vendor/workers-rs`, and `vendor/pingora` directly into native Rust builds.
+`ay` is a Rust workspace combining upstream crates from `vendor/`:
 
-### Developing
+- `vendor/zed`: GPUI, editor, rope, sum_tree, LSP, terminal, agent
+- `vendor/gpui-kit`: GPUI components and `gpui-fast`
+- `vendor/bun`: non-JSC Rust crates
+- `vendor/blitz` and `vendor/dioxus`: HTML/CSS rendering and UI packages
+- `vendor/cloudflare-os`, `vendor/kitesurf`, `vendor/workers-rs`, `vendor/pingora`: edge and proxy crates
 
-Clone with shallow submodules and enable the repository pre-commit hook:
+### Building
 
 ```sh
 git clone --recurse-submodules --shallow-submodules https://github.com/aphrody-labs/ay.git
 cd ay
 git config core.hooksPath .githooks
-```
-
-Run tests and lints:
-
-```sh
 cargo test --workspace
-cargo clippy --workspace --all-targets --no-deps -- -D warnings
 ```
 
 ### Licensing
 
-First-party code in this repository is dual-licensed under MIT and Apache-2.0. Submodules under `vendor/` retain their upstream licenses.
+First-party code is dual-licensed under MIT and Apache-2.0. Submodules under `vendor/` keep their respective upstream licenses.
