@@ -1,0 +1,54 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ay",
+]
+exclude = [
+    "vendor",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aphrody-labs/ay"
+
+[workspace.dependencies]
+blitz-traits = { path = "vendor/blitz/packages/blitz-traits" }
+bun_hpack = { path = "vendor/bun/src/hpack" }
+bun_wyhash = { path = "vendor/bun/src/wyhash" }
+pingora-ketama = { path = "vendor/pingora/pingora-ketama" }
+rope = { path = "vendor/zed/crates/rope" }
+sum_tree = { path = "vendor/zed/crates/sum_tree" }
+tinyufo = { package = "TinyUFO", path = "vendor/pingora/tinyufo" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+redundant_imports = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+redundant_clone = "deny"
+unnecessary_to_owned = "deny"
+needless_collect = "deny"
+clone_on_ref_ptr = "deny"
+inefficient_to_string = "deny"
+manual_string_new = "deny"
+large_types_passed_by_value = "deny"
+manual_memcpy = "deny"
+
+[profile.dist]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.compact]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

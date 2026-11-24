@@ -1,0 +1,3 @@
+too-large-for-stack = 512
+trivial-copy-size-limit = 16
+cognitive-complexity-threshold = 25

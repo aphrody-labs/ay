@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -Ev '^(vendor/|\.githooks/pre-commit$)' || true)
+[ -z "$STAGED" ] && exit 0
+
+for f in $STAGED; do
+  [ -f "$f" ] || continue
+  if grep -E -q '([A-Za-z0-9._%+-]+@gmail\.com|10\.200\.77\.|/srv/xbuild|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' "$f"; then
+    echo "pre-commit blocked: private data or secret pattern in $f" >&2
+    exit 1
+  fi
+done

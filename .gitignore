@@ -1,0 +1,13 @@
+/target/
+node_modules/
+.cache/
+dist/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+.dev.vars
+*.log
+.DS_Store
+Thumbs.db

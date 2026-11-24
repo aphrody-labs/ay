@@ -1,0 +1,45 @@
+[submodule "vendor/gpui-kit"]
+	path = vendor/gpui-kit
+	url = https://github.com/aphrody-labs/gpui-kit.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/blitz"]
+	path = vendor/blitz
+	url = https://github.com/aphrody-labs/blitz.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/zed"]
+	path = vendor/zed
+	url = https://github.com/aphrody-labs/zed.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/bun"]
+	path = vendor/bun
+	url = https://github.com/aphrody-labs/bun.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/dioxus"]
+	path = vendor/dioxus
+	url = https://github.com/aphrody-labs/dioxus.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/cloudflare-os"]
+	path = vendor/cloudflare-os
+	url = https://github.com/aphrody-labs/cloudflare-os.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/kitesurf"]
+	path = vendor/kitesurf
+	url = https://github.com/aphrody-labs/kitesurf.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/workers-rs"]
+	path = vendor/workers-rs
+	url = https://github.com/aphrody-labs/workers-rs.git
+	shallow = true
+	ignore = dirty
+[submodule "vendor/pingora"]
+	path = vendor/pingora
+	url = https://github.com/aphrody-labs/pingora.git
+	shallow = true
+	ignore = dirty
