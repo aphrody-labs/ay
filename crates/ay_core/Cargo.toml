@@ -1,0 +1,20 @@
+[package]
+name = "aphrody-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Bun-inspired pure-Rust core foundation (0 JSC, 0 V8): generational Arena/SlotId, zero-alloc byte scanning, static CoreError, capability bitsets, and scoped debug logging."
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+zerocopy = { workspace = true }
+
+[lints]
+workspace = true

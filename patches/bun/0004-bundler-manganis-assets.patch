@@ -1,0 +1,65 @@
+diff --git a/src/bundler/lib.rs b/src/bundler/lib.rs
+index 03b6d11e67..69c5e240c7 100644
+--- a/src/bundler/lib.rs
++++ b/src/bundler/lib.rs
+@@ -14,6 +14,7 @@ use bun_sema_standalone as _;
+ mod native_test_shims;
+ 
+ pub mod error;
++pub mod manganis_assets;
+ pub use error::{Error, Result};
+ 
+ pub use bun_resolver::fs as bun_fs;
+
+diff --git a/src/bundler/manganis_assets.rs b/src/bundler/manganis_assets.rs
+new file mode 100644
+index 0000000000..e41d25893c
+--- /dev/null
++++ b/src/bundler/manganis_assets.rs
+@@ -0,0 +1,46 @@
++//! Manganis `__ASSETS__` bundler integration backed directly by Bun's Highway-SIMD crates
++//! (`bun_css`, `bun_png`, `bun_jpeg`, `bun_webp`, `bun_brotli`, `bun_zstd`, `bun_exe_format`).
++
++#![allow(dead_code)]
++
++use bun_core::strings;
++
++/// Binary link section name used by Manganis to embed asset descriptors in ELF/PE/Mach-O/Wasm.
++pub const MANGANIS_SECTION_NAME: &str = "__ASSETS__";
++
++/// Target optimizer backend inside Bun for a Manganis asset path.
++#[repr(u8)]
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ManganisOptimizerKind {
++    BunCssTailwind = 0,
++    BunImageAvifWebpPngJpeg = 1,
++    BunJsTsBundler = 2,
++    WasmSplitBinaryen133 = 3,
++    RawBrotliZstdCopy = 4,
++}
++
++/// Route a Manganis asset path to the exact deduplicated Bun optimizer in O(1).
++#[inline]
++pub fn select_manganis_optimizer(asset_path: &str) -> ManganisOptimizerKind {
++    let bytes = asset_path.as_bytes();
++    if strings::ends_with(bytes, b".css") || strings::ends_with(bytes, b".scss") {
++        ManganisOptimizerKind::BunCssTailwind
++    } else if strings::ends_with(bytes, b".png")
++        || strings::ends_with(bytes, b".jpg")
++        || strings::ends_with(bytes, b".jpeg")
++        || strings::ends_with(bytes, b".webp")
++        || strings::ends_with(bytes, b".avif")
++    {
++        ManganisOptimizerKind::BunImageAvifWebpPngJpeg
++    } else if strings::ends_with(bytes, b".ts")
++        || strings::ends_with(bytes, b".tsx")
++        || strings::ends_with(bytes, b".js")
++        || strings::ends_with(bytes, b".mjs")
++    {
++        ManganisOptimizerKind::BunJsTsBundler
++    } else if strings::ends_with(bytes, b".wasm") {
++        ManganisOptimizerKind::WasmSplitBinaryen133
++    } else {
++        ManganisOptimizerKind::RawBrotliZstdCopy
++    }
++}

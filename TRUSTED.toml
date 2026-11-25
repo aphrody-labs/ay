@@ -1,0 +1,60 @@
+# Trusted Computing Base (TCB) manifest for `ay` (AlphaProof Code Rules A5-A7, D18-D19).
+# Every path in this repository falls into exactly one trust tier:
+#   - trusted: human-reviewed specifications, invariants, toolchain pins, and build config
+#   - trusted_in_part: audited core data structures, hashers, codecs, and layout engines
+#   - generated: product / runtime / CLI / UI implementation verified against trusted specs
+
+schema = "aphrody.trusted.v1"
+repo = "ay"
+amendments_dir = ".agents/amendments"
+lock_file = "acceptance.lock"
+
+[trusted]
+paths = [
+  "TRUSTED.toml",
+  "Cargo.toml",
+  "Cargo.lock",
+  "crates/ay/tests/formal_invariants.rs",
+  "crates/bun_hpack/tests/codec.rs",
+  "crates/ay_cli/src/main.rs",
+]
+
+[trusted_in_part]
+paths = [
+  "crates/ay_core/src/**",
+  "crates/ay_design/src/**",
+  "crates/blitz_traits/src/**",
+  "crates/bun_hpack/**",
+  "crates/bun_wyhash/**",
+  "crates/rope/src/**",
+  "crates/sum_tree/src/**",
+]
+
+[generated]
+paths = [
+  "crates/ay/src/**",
+  "crates/ay_craft/src/**",
+  "crates/ay_macros/src/**",
+  "crates/ay_net/src/**",
+  "crates/ay_ui/src/**",
+  "crates/gpui_util/src/**",
+  "crates/ztracing/src/**",
+  "crates/ztracing_macro/src/**",
+]
+
+[hooks]
+# External contracts assumed without re-proving inside this repository.
+compiler = "rustc 1.100+ / Edition 2024 (stock LLVM codegen)"
+runtime = "Rust std, zerocopy 0.8.64, tokio 1.45, axum 0.8.9, pingora-ketama 0.9.1, TinyUFO 0.9.1, lol_html 3.0.3"
+unsafe_boundary = "gpui_util::Deferred / Pin::new_unchecked (3 lines); all other 15 crates enforce unsafe_code = forbid"
+
+[assumptions]
+network = "disabled in unit, differential, and formal invariant tests"
+determinism = "fixed PRNG seeds in differential model checks and avalanche tests"
+unsafe_policy = "forbid across 15 of 16 workspace crates; blitz_traits, rope, sum_tree verified 0 unsafe"
+
+[[deviations]]
+id = "DEV-AY-01"
+path = "tests/blitz"
+reason = "Legacy upstream Blitz/WPT external harness excluded from active Cargo workspace; not compiled in ay builds."
+effect = "Zero impact on workspace binary safety; tracked separately for browser WPT conformance runs."

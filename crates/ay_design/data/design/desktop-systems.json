@@ -1,0 +1,465 @@
+{
+  "schema": "aphrody.desktop-systems.v1",
+  "description": "Declarative desktop design, optical material, and window tiling specification across Googlebook Material 3 Expressive, Apple Liquid Glass + HyprMac BSP, Android Desktop freeform, Windows Fluent Mica/Acrylic, and Omarchy Hyprland.",
+  "material3Source": "configs/design/material3.json",
+  "androidConfigs": [
+    "configs/android/android.toml",
+    "configs/android/android-17.toml"
+  ],
+  "omarchyThemesCatalog": "configs/themes/*/theme.toml",
+  "ecosystems": {
+    "googlebook_m3": {
+      "id": "googlebook_m3",
+      "name": "Material 3 Expressive & Googlebook OS",
+      "tokenSource": "configs/design/material3.json",
+      "tokensNamespace": "androidx.compose.material3.tokens",
+      "defaultTiling": "android_freeform",
+      "supportedModes": ["dark", "light", "neural_obsidian", "oled_pitch"],
+      "colorRoles": {
+        "backdrop": "Background",
+        "windowChrome": "SurfaceContainerLowest",
+        "windowBodyLight": "SurfaceContainerLowest",
+        "windowBodyDark": "SurfaceContainer",
+        "topStatusBar": "Background",
+        "dockCapsule": "SurfaceContainerHigh",
+        "dockActiveIndicator": "Primary",
+        "assistantTranscript": "SurfaceContainerHigh",
+        "assistantCapsule": "SurfaceContainerLowest",
+        "assistantUploadPill": "PrimaryContainer",
+        "onAssistantUploadPill": "OnPrimaryContainer",
+        "primaryAction": "Primary",
+        "onPrimaryAction": "OnPrimary",
+        "textPrimary": "OnSurface",
+        "textMuted": "OnSurfaceVariant",
+        "border": "OutlineVariant",
+        "scrim": "Scrim"
+      },
+      "chromeMetrics": {
+        "topStatusBarHeightDp": 28,
+        "floatingInputButtonSizeDp": 32,
+        "windowTitlebarHeightDp": 44,
+        "windowCornerRadiusDp": 20,
+        "windowInnerContentRadiusDp": 14,
+        "windowControlSizeDp": 28,
+        "windowControls": ["minimize", "maximize", "close"],
+        "bottomDockHeightDp": 60,
+        "bottomDockTopCornerRadiusDp": 16,
+        "dockIconSizeDp": 40,
+        "dockActiveDotWidthDp": 16,
+        "dockActiveDotHeightDp": 4,
+        "assistantTranscriptRadiusDp": 18,
+        "assistantCapsuleRadiusDp": 999,
+        "assistantEdgeGlowColorsRole": [
+          "Primary",
+          "Tertiary",
+          "Error",
+          "Secondary"
+        ]
+      },
+      "materials": {
+        "obsidianPrismBackdrop": {
+          "kind": "prism_backdrop",
+          "diagonalBeamAngleDeg": 68.0,
+          "beamOpacity": 0.42
+        },
+        "dockGlass": {
+          "kind": "translucent_capsule",
+          "defaultOpacity": 0.72,
+          "blurRadiusPx": 24.0
+        },
+        "geminiEdgeGlow": {
+          "kind": "four_color_edge_stipple",
+          "defaultOpacity": 0.84,
+          "blurRadiusPx": 20.0,
+          "stippleNoiseStrength": 0.14
+        }
+      },
+      "shortcuts": [
+        { "shortcut": "Search+Space", "action": "launcher_toggle" },
+        { "shortcut": "Search+G", "action": "assistant_overlay_toggle" },
+        { "shortcut": "Alt+[", "action": "snap_window_left" },
+        { "shortcut": "Alt+]", "action": "snap_window_right" },
+        { "shortcut": "Alt+=", "action": "window_maximize_toggle" }
+      ]
+    },
+    "apple_liquid_glass": {
+      "id": "apple_liquid_glass",
+      "name": "Apple Liquid Glass & macOS Windowing",
+      "defaultTiling": "native_grid",
+      "supportedModes": ["dark", "light"],
+      "palettes": {
+        "dark": {
+          "wallpaperBase": "#0A101D",
+          "wallpaperAccent": "#1E3A5F",
+          "surface": "#161B26",
+          "surfaceElevated": "#1F2636",
+          "sidebarGlass": "#192130",
+          "toolbarGlass": "#1E2738",
+          "cardGlass": "#232C3F",
+          "controlFill": "#2E3A52",
+          "accent": "#0A84FF",
+          "onAccent": "#FFFFFF",
+          "accentSecondary": "#64D2FF",
+          "textPrimary": "#F5F7FA",
+          "textMuted": "#A8B3C7",
+          "specularRim": "#FFFFFF",
+          "borderHairline": "#3D4A63",
+          "danger": "#FF453A",
+          "warning": "#FFD60A",
+          "success": "#30D158"
+        },
+        "light": {
+          "wallpaperBase": "#DCE8F7",
+          "wallpaperAccent": "#A6C8F0",
+          "surface": "#F4F7FB",
+          "surfaceElevated": "#FFFFFF",
+          "sidebarGlass": "#E9EFF8",
+          "toolbarGlass": "#EFF4FB",
+          "cardGlass": "#FFFFFF",
+          "controlFill": "#DCE4F0",
+          "accent": "#007AFF",
+          "onAccent": "#FFFFFF",
+          "accentSecondary": "#32ADE6",
+          "textPrimary": "#111827",
+          "textMuted": "#4B5563",
+          "specularRim": "#FFFFFF",
+          "borderHairline": "#C7D2E3",
+          "danger": "#FF3B30",
+          "warning": "#FFCC00",
+          "success": "#34C759"
+        }
+      },
+      "materials": {
+        "liquidGlass": {
+          "kind": "liquid_glass",
+          "transparencyMin": 0.0,
+          "transparencyMax": 1.0,
+          "defaultTransparency": 0.78,
+          "vibrancySaturation": 1.35,
+          "diffusionBlurRadiusPx": 28.0,
+          "refractionIor": 1.45,
+          "specularEdgeHighlight": {
+            "intensity": 0.42,
+            "fresnelPower": 3.2,
+            "rimWidthPx": 1.0
+          },
+          "reducedTransparencyOpaqueFallback": true
+        },
+        "scrollEdgeEffect": {
+          "defaultStyle": "NSScrollEdgeEffectStyle.hard",
+          "supportedStyles": [
+            "NSScrollEdgeEffectStyle.automatic",
+            "NSScrollEdgeEffectStyle.hard",
+            "NSScrollEdgeEffectStyle.soft"
+          ],
+          "edgeHeightDp": 24
+        }
+      },
+      "sdkMetrics": {
+        "windowCornerRadiusDp": 26,
+        "sidebarCornerRadiusDp": 16,
+        "toolbarHeightDp": 52,
+        "toolbarControlHeightDp": 32,
+        "pillCornerRadiusDp": 999,
+        "safeInsetDp": 12,
+        "concentricRule": "inner_radius = max(0, outer_radius - inset)"
+      },
+      "components": {
+        "navigationSplitView": {
+          "type": "NavigationSplitView / NSSplitView",
+          "sidebarMinWidthDp": 220,
+          "sidebarIdealWidthDp": 260,
+          "contentMinWidthDp": 360,
+          "detailMinWidthDp": 440,
+          "collapsible": true
+        },
+        "customizableToolbar": {
+          "type": "NSToolbarItemGroup",
+          "groups": [
+            "sidebar_toggle",
+            "back_forward",
+            "segmented_view_mode",
+            "flexible_space",
+            "share_action",
+            "inspector_toggle"
+          ],
+          "customizable": true,
+          "displayMode": "iconAndLabel"
+        },
+        "deviceHub": {
+          "type": "DeviceHub",
+          "resizableSimulatorWindowing": true,
+          "presets": [
+            { "id": "phone_compact", "width": 393, "height": 852 },
+            { "id": "tablet_split", "width": 1024, "height": 768 },
+            { "id": "desktop_wide", "width": 1440, "height": 900 }
+          ]
+        }
+      },
+      "nativeWindowTiling": {
+        "halves": ["left", "right", "top", "bottom"],
+        "quarters": ["top_left", "top_right", "bottom_left", "bottom_right"],
+        "optionDragDropZonePreview": true,
+        "fullScreenAllowsTiling": true,
+        "windowIdealPlacement": ["fill", "center", "cascade"],
+        "marginToggle": true,
+        "defaultMarginPx": 8
+      },
+      "hyprMac": {
+        "project": "zacharytgray/HyprMac",
+        "accessibilityMode": "no_sip_ax_observer",
+        "modifierKey": "CapsLock (Hypr)",
+        "algorithm": "bsp_dwindle",
+        "workspaceCount": 10,
+        "shortcutOverlay": "Hypr+K",
+        "scratchpadSupported": true,
+        "defaultFloatingApps": ["Calculator", "System Settings", "Quick Look", "DeviceHub"]
+      },
+      "shortcuts": [
+        { "shortcut": "Fn+Control+Left/Right/Up/Down", "action": "native_tile_half" },
+        { "shortcut": "Fn+Control+F", "action": "native_tile_fill" },
+        { "shortcut": "Option+Drag", "action": "native_drop_zone_preview" },
+        { "shortcut": "Hypr+1..0", "action": "hyprmac_switch_workspace" },
+        { "shortcut": "Hypr+K", "action": "hyprmac_shortcut_overlay" },
+        { "shortcut": "Hypr+Shift+Return", "action": "hyprmac_scratchpad_toggle" },
+        { "shortcut": "Hypr+V", "action": "hyprmac_toggle_floating" }
+      ]
+    },
+    "fluent_mica": {
+      "id": "fluent_mica",
+      "name": "Windows Fluent Design (Mica & Acrylic)",
+      "defaultTiling": "fluent_snap_layout",
+      "supportedModes": ["dark", "light", "high_contrast"],
+      "palettes": {
+        "dark": {
+          "micaBackdrop": "#1C1F26",
+          "micaAltBackdrop": "#15181E",
+          "inactiveFallback": "#202020",
+          "acrylicSurface": "#2C303A",
+          "cardSurface": "#272A32",
+          "controlFill": "#353944",
+          "accent": "#60CDFF",
+          "onAccent": "#001E2B",
+          "textPrimary": "#FFFFFF",
+          "textMuted": "#C7CCD6",
+          "borderStroke": "#454A56",
+          "focusRing": "#FFFFFF",
+          "smokeScrim": "#000000",
+          "danger": "#FF99A4",
+          "warning": "#FCE100",
+          "success": "#6CCB5F"
+        },
+        "light": {
+          "micaBackdrop": "#F3F6FB",
+          "micaAltBackdrop": "#E9EEF5",
+          "inactiveFallback": "#F3F3F3",
+          "acrylicSurface": "#FCFCFD",
+          "cardSurface": "#FFFFFF",
+          "controlFill": "#EAEFF7",
+          "accent": "#005FB8",
+          "onAccent": "#FFFFFF",
+          "textPrimary": "#1A1C1E",
+          "textMuted": "#5A606A",
+          "borderStroke": "#D1D5DB",
+          "focusRing": "#000000",
+          "smokeScrim": "#000000",
+          "danger": "#C42B1C",
+          "warning": "#9D5D00",
+          "success": "#0F7B0F"
+        },
+        "high_contrast": {
+          "micaBackdrop": "#000000",
+          "micaAltBackdrop": "#000000",
+          "inactiveFallback": "#000000",
+          "acrylicSurface": "#000000",
+          "cardSurface": "#000000",
+          "controlFill": "#000000",
+          "accent": "#1AEBFF",
+          "onAccent": "#000000",
+          "textPrimary": "#FFFFFF",
+          "textMuted": "#FFFF00",
+          "borderStroke": "#FFFFFF",
+          "focusRing": "#FFFF00",
+          "smokeScrim": "#000000",
+          "danger": "#FF6666",
+          "warning": "#FFFF00",
+          "success": "#00FF66"
+        }
+      },
+      "materials": {
+        "mica": {
+          "kind": "mica",
+          "wallpaperTintOpacity": 0.16,
+          "luminosityBlend": 0.92,
+          "inactiveFallbackOpaque": true
+        },
+        "micaAlt": {
+          "kind": "mica_alt",
+          "wallpaperTintOpacity": 0.24,
+          "luminosityBlend": 0.88,
+          "inactiveFallbackOpaque": true
+        },
+        "acrylic": {
+          "kind": "acrylic",
+          "scope": "transient_flyout_and_menu",
+          "blurRadiusPx": 30.0,
+          "noiseGrainOpacity": 0.025,
+          "tintOpacity": 0.72,
+          "luminosityOpacity": 0.85
+        },
+        "smoke": {
+          "kind": "smoke_scrim",
+          "scope": "modal_backdrop",
+          "opacity": 0.35
+        }
+      },
+      "themeShadow": {
+        "cardElevationDp": 8,
+        "commandBarElevationDp": 16,
+        "flyoutElevationDp": 32,
+        "dialogElevationDp": 128
+      },
+      "radii": {
+        "controlPx": 4,
+        "cardPx": 8,
+        "cardMaxPx": 12,
+        "dwmShellPx": 8,
+        "dwmShellMaxPx": 12
+      },
+      "focusIndicator": {
+        "outerWidthPx": 2,
+        "innerWidthPx": 1,
+        "highContrastGuaranteed": true
+      },
+      "snapLayouts": {
+        "zonesSupported": [2, 3, 4],
+        "twoZoneLayouts": ["split_50_50", "priority_66_34"],
+        "threeZoneLayouts": ["left_50_right_stack", "center_focus_25_50_25", "three_columns_33"],
+        "fourZoneLayouts": ["quad_grid_2x2"]
+      },
+      "shortcuts": [
+        { "shortcut": "Win+Z", "action": "snap_layout_picker" },
+        { "shortcut": "Win+Left/Right", "action": "snap_half" },
+        { "shortcut": "Win+Up/Down", "action": "snap_quarter_or_maximize" },
+        { "shortcut": "Alt+Shift+PrintScreen", "action": "high_contrast_toggle" }
+      ]
+    },
+    "omarchy_hyprland": {
+      "id": "omarchy_hyprland",
+      "name": "Omarchy Hyprland Tiling Themes",
+      "themeDirectory": "configs/themes",
+      "themeCount": 28,
+      "defaultTheme": "aphrody",
+      "defaultTiling": "hyprmac_bsp",
+      "aphrodyThemeDelegatesTo": "configs/design/material3.json",
+      "themes": [
+        "aphrody",
+        "arch",
+        "cachyos",
+        "catppuccin",
+        "catppuccin-latte",
+        "ethereal",
+        "everforest",
+        "flexoki-light",
+        "gruvbox",
+        "hackerman",
+        "jade-horse",
+        "kanagawa",
+        "last-horizon",
+        "lumon",
+        "lupine",
+        "matte-black",
+        "miasma",
+        "nord",
+        "osaka-jade",
+        "retro-82",
+        "ristretto",
+        "rose-pine",
+        "solitude",
+        "starship",
+        "synthwave84",
+        "tokyo-night",
+        "vantablack",
+        "white"
+      ],
+      "hyprlandDefaults": {
+        "gapsInPx": 6,
+        "gapsOutPx": 12,
+        "borderSizePx": 2,
+        "roundingPx": 10,
+        "dwindleSplitRatio": 0.52,
+        "workspaces": 10
+      }
+    }
+  },
+  "tilingEngines": {
+    "native_grid": {
+      "id": "native_grid",
+      "name": "Native Grid & Edge Snap",
+      "modes": ["fill", "center", "cascade", "halves", "quarters", "three_columns"],
+      "supportsOptionDragPreview": true,
+      "supportsFullScreenTiling": true,
+      "supportsMarginToggle": true,
+      "defaultMarginPx": 8
+    },
+    "hyprmac_bsp": {
+      "id": "hyprmac_bsp",
+      "name": "HyprMac BSP Dwindle",
+      "algorithm": "binary_space_partition_dwindle",
+      "defaultSplitRatio": 0.5,
+      "workspaces": 10,
+      "modifier": "CapsLock (Hypr)",
+      "shortcutHud": "Hypr+K",
+      "scratchpad": true,
+      "floatingRules": true
+    },
+    "android_freeform": {
+      "id": "android_freeform",
+      "name": "Android Desktop Freeform",
+      "androidConfigSources": [
+        "configs/android/android.toml",
+        "configs/android/android-17.toml"
+      ],
+      "topStatusBarInsetPx": 28,
+      "bottomTaskbarInsetPx": 68,
+      "minWindowWidthPx": 360,
+      "minWindowHeightPx": 280,
+      "cascadeOffsetPx": [44, 36],
+      "inputModes": ["pointer_keyboard", "gamepad_focus_ring"]
+    },
+    "fluent_snap_layout": {
+      "id": "fluent_snap_layout",
+      "name": "Windows Fluent Snap Layouts",
+      "bottomTaskbarInsetPx": 48,
+      "zoneCounts": [2, 3, 4],
+      "defaultMarginPx": 8,
+      "shellCornerRadiusPx": 8
+    }
+  },
+  "higW3cMappings": [
+    {
+      "ecosystemRole": "Apple Liquid Glass / Fluent Acrylic / M3 Dock",
+      "w3cMediaFeature": "prefers-reduced-transparency: reduce",
+      "w3cAriaRole": "region / complementary / toolbar",
+      "wcagAaConstraint": "Minimum 4.5:1 body text contrast and 3.0:1 border/focus contrast even when transparency is reduced to opaque fallback."
+    },
+    {
+      "ecosystemRole": "Apple NSScrollEdgeEffectStyle.hard",
+      "w3cCssEquivalent": "scroll-padding + hard backdrop boundary mask",
+      "w3cAriaRole": "region",
+      "wcagAaConstraint": "Preserve clear separation between scrolled content and sticky toolbar controls."
+    },
+    {
+      "ecosystemRole": "Fluent 2px Focus Ring / HyprMac Focus Border / M3 Focus Indicator",
+      "w3cCssEquivalent": ":focus-visible { outline: 2px solid ...; outline-offset: 2px; }",
+      "w3cAriaRole": "focusable interactive control",
+      "wcagAaConstraint": "WCAG 2.2 SC 2.4.13 Focus Appearance (>= 2px perimeter, >= 3:1 contrast)."
+    },
+    {
+      "ecosystemRole": "Spring Motion (M3 Expressive / Liquid Glass / Hyprland)",
+      "w3cMediaFeature": "prefers-reduced-motion: reduce",
+      "w3cAriaRole": "presentation",
+      "wcagAaConstraint": "Snap transitions to opacity cross-fade <= 150ms when reduced motion is enabled."
+    }
+  ]
+}

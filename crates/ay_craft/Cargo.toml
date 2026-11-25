@@ -1,0 +1,49 @@
+[package]
+name = "aphrody-craft"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Modular Aphrody Craft suite binary & embeddable multimedia/format library (CLI + MCP Code Mode + HTTP + Wasm32 + Material 3 / Astryx brand, à la carte features)."
+
+[lib]
+name = "aphrody_craft"
+path = "src/lib.rs"
+
+[[bin]]
+name = "craft"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "mcp", "codecs", "brand", "fig", "photo", "film", "sound"]
+cli = []
+mcp = []
+http = []
+wasm = []
+codecs = []
+brand = []
+
+# À la carte Craft suite modules (zero duplicate deps via shared craft-libs & wgpu 30)
+fig = ["codecs", "brand"]
+photo = ["codecs"]
+light = ["codecs"]
+film = ["codecs"]
+effect = ["codecs"]
+sound = ["codecs"]
+word = ["codecs"]
+grid = ["codecs"]
+deck = ["codecs"]
+pdf = ["codecs"]
+vector = ["codecs"]
+cad = ["codecs"]
+all = ["cli", "mcp", "http", "wasm", "codecs", "brand", "fig", "photo", "light", "film", "effect", "sound", "word", "grid", "deck", "pdf", "vector", "cad"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

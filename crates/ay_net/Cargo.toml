@@ -1,0 +1,30 @@
+[package]
+name = "ay_net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/ay_net.rs"
+doctest = false
+
+[dependencies]
+axum = { workspace = true }
+ay_ui = { workspace = true }
+bun_hpack = { workspace = true }
+bun_wyhash = { workspace = true }
+design-engine = { workspace = true, default-features = false }
+http = { workspace = true }
+lol_html = { workspace = true }
+pingora-ketama = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tinyufo = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true

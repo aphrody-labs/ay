@@ -1,0 +1,46 @@
+# Reproducible Android 17 (API 37) x86_64 / Windows 11 / Web WASM32 pins for `crates/os/android`.
+# Live-verified on Windows 11 workstation & fr1/n2 fleet on 2026-11-22.
+
+schema = 1
+android_version = "17"
+api_level = 37
+arch = "x86_64"
+
+[sdk]
+platform = "platforms/android-37.0"
+platform_minor = "platforms/android-37.2"
+system_image = "system-images/android-37.0/google_apis/x86_64"
+build_tools = "build-tools/37.0.0"
+ndk = "ndk/30.0.16248370"
+platform_tools_min = "37.0.3"
+emulator_min = "37.3.10"
+android_cli_min = "1.1.16919734"
+
+[windows11]
+default_avd = "Aphrody_Play_37"
+fallback_avds = ["bun_pixel_api37", "aphrody-x64"]
+host_crate = "crates/os/android/win"
+adb_reverse_ports = [8787, 8790]
+zero_wsl2_direct_emulator = true
+
+[web_wasm]
+crate = "crates/wasm/android_web"
+target = "wasm32-unknown-unknown"
+wgpu_version = "30.0.2"
+packer_bin = "aphrody-android-web-pack"
+relay_bin = "aphrody-android-ws-relay"
+cdn_prefix = "https://cdn.aphrody.com/v1/aphrody-android-web/"
+coop_coep_required = true
+
+[linux_container]
+crate = "crates/os/android"
+compositor_crate = "crates/os/android/wl"
+stream_crate = "crates/os/android/stream"
+oci_pins = "configs/android/android.toml"
+
+[apk_tools]
+scrcpy = "5.0.1"
+jadx = "1.5.6"
+apktool = "3.0.3"
+bundletool = "1.18.3"
+gradle = "9.9.1"
