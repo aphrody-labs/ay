@@ -8,11 +8,14 @@ license = "Apache-2.0"
 doctest = false
 
 [features]
-web = []
+web = ["dep:wasm-bindgen"]
 
 [dependencies]
 tracing = { workspace = true }
 ztracing_macro = { workspace = true }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen = { version = "0.2.130", optional = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(ztracing)', 'cfg(ztracing_with_memory)'] }

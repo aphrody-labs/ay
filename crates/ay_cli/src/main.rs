@@ -211,9 +211,6 @@ enum Commands {
         status: String,
     },
 
-    /// Inspect terminal multiplexer and Kitty graphics protocol readiness.
-    Mux,
-
     /// Diagnose host toolchains, workspace TCB, and `unsafe_code = "forbid"` coverage.
     Doctor,
 
@@ -1054,13 +1051,6 @@ fn main() -> ExitCode {
                 println!("{}", serde_json::to_string(&all).unwrap_or_default());
                 ExitCode::SUCCESS
             }
-        }
-
-        Commands::Mux => {
-            println!(
-                r#"{{"ok":true,"mux":"ay-mux","backends":["portable-pty","alacritty_terminal","zed-terminal"],"kitty_graphics":true}}"#
-            );
-            ExitCode::SUCCESS
         }
 
         Commands::Doctor => {
