@@ -51,8 +51,8 @@ const SLOP_TERMS: &[&str] = &["lorem ipsum", "click here", "todo:", "placeholder
 const BANNED_COPY_TERMS: &[&str] = &[
     "unified",
     "stack",
-    "souverain",
-    "sovereign",
+    "local",
+    "local",
     "kinetic glass",
     "constitution",
     "seamless",
