@@ -1,0 +1,808 @@
+// Copyright (c) 2026 Cloudflare, Inc.
+// Licensed under the Apache 2.0 license found in the LICENSE file or at:
+// https://opensource.org/licenses/Apache-2.0
+
+//! Borrows a Krilla `Surface` and its active `Page` for one `paint_scene` call.
+//! The Wasm path is single-threaded and has no `Send` or `Sync` contract.
+//! `layer_pops` tracks pushes made for each anyrender layer so `pop_layer`
+//! unwinds the matching Krilla states.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use anyrender::{
+    AntiAliasing, BoxShadowGeometry, BoxShadowKind, Glyph as AnyGlyph, MaskMode,
+    NonUniformRoundedRect, NormalizedCoord, PaintRef, RenderContext,
+};
+use kurbo::{Affine, PathEl, Shape, Stroke, Vec2};
+use peniko::{BlendMode, Color, Compose, Fill as PenikoFill, Mix, StyleRef};
+
+use krilla::blend::BlendMode as KrillaBlendMode;
+use krilla::color::rgb;
+use krilla::geom::{
+    Path as KrillaPath, PathBuilder, Point as KrillaPoint, Transform as KrillaTransform,
+};
+use krilla::image::Image as KrillaImage;
+use krilla::num::NormalizedF32;
+use krilla::paint::{
+    Fill as KrillaFill, FillRule as KrillaFillRule, LineCap as KrillaLineCap,
+    LineJoin as KrillaLineJoin, Stroke as KrillaStroke,
+};
+use krilla::surface::Surface;
+use krilla::text::{Font as KrillaFont, GlyphId as KrillaGlyphId, KrillaGlyph, Tag as KrillaTag};
+
+use skrifa::raw::TableProvider;
+use skrifa::{FontRef, MetadataProvider};
+
+const NORMALIZED_COORD_SCALE: f32 = 16_384.0;
+const RGBA_ALPHA_MAX: f32 = 255.0;
+
+pub struct KrillaPaintScene<'a, 'b> {
+    surface: &'a mut Surface<'b>,
+    font_cache: HashMap<FontKey, CachedFont>,
+    layer_pops: Vec<LayerPops>,
+    /// Open mask layers. Krilla takes a mask before the content it masks, while anyrender
+    /// draws a mask after it, so a mask cannot be applied here: its content is not drawn
+    /// (it is not page content) and the content it would mask stays unmasked.
+    open_masks: u32,
+    pending_text: String,
+    pending_text_ranges: Vec<std::ops::Range<usize>>,
+}
+
+/// What `pop_layer` unwinds for one anyrender layer.
+struct LayerPops {
+    krilla_pops: u32,
+    mask: bool,
+}
+
+impl<'a, 'b> KrillaPaintScene<'a, 'b> {
+    pub fn new(surface: &'a mut Surface<'b>) -> Self {
+        Self {
+            surface,
+            font_cache: HashMap::new(),
+            layer_pops: Vec::with_capacity(16),
+            open_masks: 0,
+            pending_text: String::new(),
+            pending_text_ranges: Vec::new(),
+        }
+    }
+
+    fn push_pops(&mut self, krilla_pops: u32) {
+        self.layer_pops.push(LayerPops {
+            krilla_pops,
+            mask: false,
+        });
+    }
+
+    /// Push a layer clip and return the Krilla pop count.
+    /// Empty paths are skipped because clipping to one erases the layer content.
+    /// The transform positions the clip; primitives carry their world transforms.
+    fn push_clip(&mut self, fill: PenikoFill, transform: Affine, clip: &impl Shape) -> u32 {
+        match shape_to_krilla_path_transformed(clip, transform) {
+            Some(path) => {
+                self.surface
+                    .push_clip_path(&path, &peniko_fill_to_krilla(fill));
+                1
+            }
+            None => 0,
+        }
+    }
+}
+
+struct CachedFont {
+    font: KrillaFont,
+    gid_to_char: std::rc::Rc<HashMap<u32, char>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct FontKey {
+    blob_ptr: usize,
+    coord_bytes: Vec<u8>,
+}
+
+impl FontKey {
+    fn new(blob_ptr: usize, coords: &[NormalizedCoord]) -> Self {
+        let mut coord_bytes = Vec::with_capacity(coords.len() * 2);
+        for c in coords {
+            coord_bytes.extend_from_slice(&c.to_le_bytes());
+        }
+        Self {
+            blob_ptr,
+            coord_bytes,
+        }
+    }
+}
+
+impl RenderContext for KrillaPaintScene<'_, '_> {}
+
+impl anyrender::PaintScene for KrillaPaintScene<'_, '_> {
+    fn reset(&mut self) {}
+
+    fn wants_glyph_text(&self) -> bool {
+        true
+    }
+
+    // Krilla writes ToUnicode entries, `/ActualText` and `/ReversedChars` from these ranges.
+    // A run without them falls back to the font's reverse cmap, which loses shaped forms.
+    fn glyph_text(&mut self, text: &str, glyph_ranges: &[std::ops::Range<usize>]) {
+        self.pending_text.clear();
+        self.pending_text_ranges.clear();
+        if glyph_ranges.iter().all(|r| text.get(r.clone()).is_some()) {
+            self.pending_text.push_str(text);
+            self.pending_text_ranges.extend(
+                glyph_ranges
+                    .iter()
+                    .map(|r| trim_bidi_controls(text, r.clone())),
+            );
+        }
+    }
+
+    fn push_layer(
+        &mut self,
+        fill: PenikoFill,
+        blend: impl Into<BlendMode>,
+        alpha: f32,
+        _transform: Affine,
+        clip: &impl Shape,
+        _filter: Option<Arc<anyrender::Filter>>,
+        _backdrop_filter: Option<Arc<anyrender::Filter>>,
+    ) {
+        let mut pops: u32 = 0;
+        let bm: BlendMode = blend.into();
+        if let Some(km) = peniko_blend_to_krilla(bm) {
+            self.surface.push_blend_mode(km);
+            pops += 1;
+        }
+        if alpha < 1.0 {
+            if let Some(n) = NormalizedF32::new(alpha.clamp(0.0, 1.0)) {
+                self.surface.push_opacity(n);
+                pops += 1;
+            }
+        }
+        pops += self.push_clip(fill, _transform, clip);
+        self.push_pops(pops);
+    }
+
+    fn push_clip_layer(&mut self, fill: PenikoFill, transform: Affine, clip: &impl Shape) {
+        // Blitz supplies the padding-box clip for replaced content; dropping it
+        // makes rounded `<img>` boxes square in PDFs while raster keeps the corners.
+        let pops = self.push_clip(fill, transform, clip);
+        self.push_pops(pops);
+    }
+
+    fn push_mask_layer(
+        &mut self,
+        _fill: PenikoFill,
+        _mode: MaskMode,
+        _transform: Affine,
+        _clip: &impl Shape,
+    ) {
+        self.layer_pops.push(LayerPops {
+            krilla_pops: 0,
+            mask: true,
+        });
+        self.open_masks += 1;
+    }
+
+    fn pop_layer(&mut self) {
+        let Some(layer) = self.layer_pops.pop() else {
+            return;
+        };
+        for _ in 0..layer.krilla_pops {
+            self.surface.pop();
+        }
+        if layer.mask {
+            self.open_masks -= 1;
+        }
+    }
+
+    fn stroke<'p>(
+        &mut self,
+        style: &Stroke,
+        transform: Affine,
+        brush: impl Into<PaintRef<'p>>,
+        _brush_transform: Option<Affine>,
+        shape: &impl Shape,
+        // PDF viewers anti-alias as they see fit.
+        _anti_aliasing: AntiAliasing,
+    ) {
+        if self.open_masks > 0 {
+            return;
+        }
+        let paint_ref: PaintRef<'p> = brush.into();
+        let color = paint_ref_to_solid_color(&paint_ref);
+
+        let pushed_transform = if !affine_is_identity(transform) {
+            self.surface.push_transform(&affine_to_krilla(transform));
+            true
+        } else {
+            false
+        };
+
+        let krilla_stroke = KrillaStroke {
+            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            width: style.width as f32,
+            miter_limit: style.miter_limit as f32,
+            line_cap: kurbo_cap_to_krilla(style.start_cap),
+            line_join: kurbo_join_to_krilla(style.join),
+            opacity: NormalizedF32::new(color.a as f32 / RGBA_ALPHA_MAX)
+                .unwrap_or(NormalizedF32::ONE),
+            dash: None,
+        };
+        self.surface.set_stroke(Some(krilla_stroke));
+
+        if let Some(path) = shape_to_krilla_path(shape) {
+            self.surface.draw_path(&path);
+        }
+        self.surface.set_stroke(None);
+
+        if pushed_transform {
+            self.surface.pop();
+        }
+    }
+
+    fn fill<'p>(
+        &mut self,
+        style: PenikoFill,
+        transform: Affine,
+        brush: impl Into<PaintRef<'p>>,
+        _brush_transform: Option<Affine>,
+        shape: &impl Shape,
+        _anti_aliasing: AntiAliasing,
+    ) {
+        if self.open_masks > 0 {
+            return;
+        }
+        let paint_ref: PaintRef<'p> = brush.into();
+
+        let pushed_transform = if !affine_is_identity(transform) {
+            self.surface.push_transform(&affine_to_krilla(transform));
+            true
+        } else {
+            false
+        };
+
+        if let anyrender::Paint::Image(img_ref) = &paint_ref {
+            if let Some(img) = image_brush_to_krilla(img_ref) {
+                let bounds = shape.bounding_box();
+                let img_w = bounds.width() as f32;
+                let img_h = bounds.height() as f32;
+                let tx = bounds.x0 as f32;
+                let ty = bounds.y0 as f32;
+                if img_w > 0.0 && img_h > 0.0 {
+                    self.surface
+                        .push_transform(&KrillaTransform::from_translate(tx, ty));
+                    let size = krilla::geom::Size::from_wh(img_w, img_h)
+                        .unwrap_or(krilla::geom::Size::from_wh(1.0, 1.0).unwrap());
+                    self.surface.draw_image(img, size);
+                    self.surface.pop();
+                }
+                if pushed_transform {
+                    self.surface.pop();
+                }
+                return;
+            }
+        }
+
+        let color = paint_ref_to_solid_color(&paint_ref);
+        let fill = KrillaFill {
+            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            opacity: NormalizedF32::new(color.a as f32 / RGBA_ALPHA_MAX)
+                .unwrap_or(NormalizedF32::ONE),
+            rule: peniko_fill_to_krilla(style),
+        };
+        self.surface.set_fill(Some(fill));
+
+        if let Some(path) = shape_to_krilla_path(shape) {
+            self.surface.draw_path(&path);
+        }
+        self.surface.set_fill(None);
+
+        if pushed_transform {
+            self.surface.pop();
+        }
+    }
+
+    fn draw_glyphs<'p, 's: 'p>(
+        &'s mut self,
+        font: &'p peniko::FontData,
+        font_size: f32,
+        _hint: bool,
+        normalized_coords: &'p [NormalizedCoord],
+        _embolden: kurbo::Vec2,
+        _style: impl Into<StyleRef<'p>>,
+        brush: impl Into<PaintRef<'p>>,
+        brush_alpha: f32,
+        transform: Affine,
+        glyph_transform: Option<Affine>,
+        glyphs: impl Iterator<Item = AnyGlyph> + Clone,
+        _anti_aliasing: AntiAliasing,
+    ) {
+        // Text given for this run applies to it alone.
+        let source_text = std::mem::take(&mut self.pending_text);
+        let mut source_ranges = std::mem::take(&mut self.pending_text_ranges);
+        if self.open_masks > 0 {
+            return;
+        }
+        let (krilla_font, gid_to_char) =
+            match get_or_register_font(&mut self.font_cache, font, normalized_coords) {
+                Some(c) => (c.font.clone(), c.gid_to_char.clone()),
+                None => return,
+            };
+
+        let paint_ref: PaintRef<'p> = brush.into();
+        let mut color = paint_ref_to_solid_color(&paint_ref);
+        color.a = ((color.a as f32) * brush_alpha.clamp(0.0, 1.0)).round() as u8;
+
+        let collected: Vec<AnyGlyph> = glyphs.collect();
+        if collected.is_empty() {
+            return;
+        }
+
+        let combined = if let Some(gt) = glyph_transform {
+            transform * gt
+        } else {
+            transform
+        };
+        let pushed_transform = if !affine_is_identity(combined) {
+            self.surface.push_transform(&affine_to_krilla(combined));
+            true
+        } else {
+            false
+        };
+
+        let fill = KrillaFill {
+            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            opacity: NormalizedF32::new(color.a as f32 / 255.0).unwrap_or(NormalizedF32::ONE),
+            rule: KrillaFillRule::NonZero,
+        };
+        self.surface.set_fill(Some(fill));
+
+        let start = KrillaPoint::from_xy(collected[0].x, collected[0].y);
+        let n = collected.len();
+        let mut krilla_glyphs: Vec<KrillaGlyph> = Vec::with_capacity(n);
+
+        let has_source = source_ranges.len() == n;
+        if has_source {
+            let gids: Vec<u32> = collected.iter().map(|g| g.id).collect();
+            map_clusters_to_widest_glyph(&mut source_ranges, &gids, |gids| {
+                glyph_advances(font, normalized_coords, gids)
+            });
+        }
+        let mut text_buf = if has_source {
+            source_text
+        } else {
+            String::with_capacity(n)
+        };
+
+        for i in 0..n {
+            let g = &collected[i];
+            let (next_dx, next_dy) = if i + 1 < n {
+                let nx = collected[i + 1].x - g.x;
+                let ny = collected[i + 1].y - g.y;
+                (nx, ny)
+            } else {
+                (0.0, 0.0)
+            };
+            let text_range = if has_source {
+                source_ranges[i].clone()
+            } else if let Some(ch) = gid_to_char.get(&g.id) {
+                let start = text_buf.len();
+                text_buf.push(*ch);
+                start..text_buf.len()
+            } else {
+                let cursor = text_buf.len();
+                cursor..cursor
+            };
+
+            krilla_glyphs.push(KrillaGlyph::new(
+                KrillaGlyphId::new(g.id),
+                next_dx / font_size,
+                0.0,
+                0.0,
+                next_dy / font_size,
+                text_range,
+                None,
+            ));
+        }
+
+        self.surface.draw_glyphs(
+            start,
+            &krilla_glyphs,
+            krilla_font,
+            &text_buf,
+            font_size,
+            false,
+        );
+
+        self.surface.set_fill(None);
+
+        if pushed_transform {
+            self.surface.pop();
+        }
+    }
+
+    /// Krilla has no blur, so only a sharp (`std_dev` 0) shadow is drawn.
+    fn draw_box_shadow(
+        &mut self,
+        transform: Affine,
+        box_shape: &NonUniformRoundedRect,
+        offset: Vec2,
+        spread: f64,
+        std_dev: f64,
+        color: Color,
+        kind: BoxShadowKind,
+    ) {
+        if std_dev > 0.0 || self.open_masks > 0 {
+            return;
+        }
+        BoxShadowGeometry::new(box_shape, offset, spread, std_dev, kind)
+            .draw_unblurred(self, transform, color);
+    }
+}
+
+/// Gives a multi-glyph cluster's text to its widest glyph and an empty range to the rest, as
+/// Chrome does, so Krilla needs no `/ActualText` span that drops `/ReversedChars` from an RTL
+/// run (an Arabic ب is a dot and a base). Mapping the base leaves no gap for extractors that
+/// place text by glyph geometry.
+fn map_clusters_to_widest_glyph(
+    ranges: &mut [std::ops::Range<usize>],
+    gids: &[u32],
+    advances: impl FnOnce(&[u32]) -> Vec<f32>,
+) {
+    let has_cluster = ranges.windows(2).any(|w| w[0] == w[1] && !w[0].is_empty());
+    if !has_cluster {
+        return;
+    }
+    let advances = advances(gids);
+    let rtl = ranges[0].start > ranges[ranges.len() - 1].start;
+    let mut split: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut i = 0;
+    while i < ranges.len() {
+        let cluster = ranges[i].clone();
+        let mut end = i + 1;
+        while end < ranges.len() && ranges[end] == cluster {
+            end += 1;
+        }
+        if end - i > 1 && !cluster.is_empty() {
+            let mut carrier = i;
+            for j in i + 1..end {
+                if advances.get(j) > advances.get(carrier) {
+                    carrier = j;
+                }
+            }
+            // Empty ranges sit on the side that keeps the run's ranges monotonic, so an RTL
+            // run still reads as reversed.
+            split.clear();
+            split.extend((i..end).map(|j| {
+                if j == carrier {
+                    return cluster.clone();
+                }
+                let edge = if (j < carrier) == rtl {
+                    cluster.end
+                } else {
+                    cluster.start
+                };
+                edge..edge
+            }));
+            // Krilla spans adjacent glyphs with equal ranges, empty ones included, so keep the
+            // cluster whole (one span with its text) when the split would put two side by side.
+            let left = i.checked_sub(1).map(|j| &ranges[j]);
+            let right = ranges.get(end);
+            let side_by_side = left
+                .into_iter()
+                .chain(split.iter())
+                .chain(right)
+                .collect::<Vec<_>>()
+                .windows(2)
+                .any(|w| w[0].is_empty() && w[0] == w[1]);
+            if !side_by_side {
+                ranges[i..end].clone_from_slice(&split);
+            }
+        }
+        i = end;
+    }
+}
+
+/// The font's advance width of each glyph, in font units, at the given variation coordinates.
+fn glyph_advances(font: &peniko::FontData, coords: &[NormalizedCoord], gids: &[u32]) -> Vec<f32> {
+    let Ok(font_ref) = FontRef::from_index(font.data.data(), font.index) else {
+        return vec![0.0; gids.len()];
+    };
+    let coords: Vec<skrifa::instance::NormalizedCoord> = coords
+        .iter()
+        .map(|c| skrifa::instance::NormalizedCoord::from_bits(*c))
+        .collect();
+    let metrics = font_ref.glyph_metrics(
+        skrifa::instance::Size::unscaled(),
+        skrifa::instance::LocationRef::new(&coords),
+    );
+    gids.iter()
+        .map(|&gid| {
+            metrics
+                .advance_width(skrifa::GlyphId::new(gid))
+                .unwrap_or(0.0)
+        })
+        .collect()
+}
+
+/// Narrows `range` past the bidi controls at its ends. Layout inserts them for `dir` and
+/// `unicode-bidi`; they are not page text, so their glyphs map to nothing.
+fn trim_bidi_controls(text: &str, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
+    let is_control = |c: char| {
+        matches!(c, '\u{061C}' | '\u{200E}' | '\u{200F}')
+            || matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+    };
+    let slice = &text[range.clone()];
+    let start = range.start + (slice.len() - slice.trim_start_matches(is_control).len());
+    let end = range.end - (slice.len() - slice.trim_end_matches(is_control).len());
+    start..end.max(start)
+}
+
+fn affine_is_identity(a: Affine) -> bool {
+    let c = a.as_coeffs();
+    c[0] == 1.0 && c[1] == 0.0 && c[2] == 0.0 && c[3] == 1.0 && c[4] == 0.0 && c[5] == 0.0
+}
+
+fn affine_to_krilla(a: Affine) -> KrillaTransform {
+    let c = a.as_coeffs();
+    KrillaTransform::from_row(
+        c[0] as f32,
+        c[1] as f32,
+        c[2] as f32,
+        c[3] as f32,
+        c[4] as f32,
+        c[5] as f32,
+    )
+}
+
+fn peniko_fill_to_krilla(f: PenikoFill) -> KrillaFillRule {
+    match f {
+        PenikoFill::NonZero => KrillaFillRule::NonZero,
+        PenikoFill::EvenOdd => KrillaFillRule::EvenOdd,
+    }
+}
+
+fn kurbo_cap_to_krilla(c: kurbo::Cap) -> KrillaLineCap {
+    match c {
+        kurbo::Cap::Butt => KrillaLineCap::Butt,
+        kurbo::Cap::Round => KrillaLineCap::Round,
+        kurbo::Cap::Square => KrillaLineCap::Square,
+    }
+}
+
+fn kurbo_join_to_krilla(j: kurbo::Join) -> KrillaLineJoin {
+    match j {
+        kurbo::Join::Miter => KrillaLineJoin::Miter,
+        kurbo::Join::Round => KrillaLineJoin::Round,
+        kurbo::Join::Bevel => KrillaLineJoin::Bevel,
+    }
+}
+
+fn peniko_blend_to_krilla(bm: BlendMode) -> Option<KrillaBlendMode> {
+    if matches!(bm.compose, Compose::SrcOver) {
+        match bm.mix {
+            Mix::Normal => None,
+            Mix::Multiply => Some(KrillaBlendMode::Multiply),
+            Mix::Screen => Some(KrillaBlendMode::Screen),
+            Mix::Overlay => Some(KrillaBlendMode::Overlay),
+            Mix::Darken => Some(KrillaBlendMode::Darken),
+            Mix::Lighten => Some(KrillaBlendMode::Lighten),
+            Mix::ColorDodge => Some(KrillaBlendMode::ColorDodge),
+            Mix::ColorBurn => Some(KrillaBlendMode::ColorBurn),
+            Mix::HardLight => Some(KrillaBlendMode::HardLight),
+            Mix::SoftLight => Some(KrillaBlendMode::SoftLight),
+            Mix::Difference => Some(KrillaBlendMode::Difference),
+            Mix::Exclusion => Some(KrillaBlendMode::Exclusion),
+            Mix::Hue => Some(KrillaBlendMode::Hue),
+            Mix::Saturation => Some(KrillaBlendMode::Saturation),
+            Mix::Color => Some(KrillaBlendMode::Color),
+            Mix::Luminosity => Some(KrillaBlendMode::Luminosity),
+        }
+    } else {
+        None
+    }
+}
+
+fn shape_to_krilla_path(shape: &impl Shape) -> Option<KrillaPath> {
+    shape_to_krilla_path_transformed(shape, Affine::IDENTITY)
+}
+
+fn shape_to_krilla_path_transformed(shape: &impl Shape, transform: Affine) -> Option<KrillaPath> {
+    let mut pb = PathBuilder::new();
+    let mut had_move = false;
+    for el in shape.path_elements(0.1) {
+        match transform * el {
+            PathEl::MoveTo(p) => {
+                pb.move_to(p.x as f32, p.y as f32);
+                had_move = true;
+            }
+            PathEl::LineTo(p) => {
+                pb.line_to(p.x as f32, p.y as f32);
+            }
+            PathEl::QuadTo(c, p) => {
+                pb.quad_to(c.x as f32, c.y as f32, p.x as f32, p.y as f32);
+            }
+            PathEl::CurveTo(c1, c2, p) => {
+                pb.cubic_to(
+                    c1.x as f32,
+                    c1.y as f32,
+                    c2.x as f32,
+                    c2.y as f32,
+                    p.x as f32,
+                    p.y as f32,
+                );
+            }
+            PathEl::ClosePath => {
+                pb.close();
+            }
+        }
+    }
+    if !had_move {
+        return None;
+    }
+    pb.finish()
+}
+
+fn paint_ref_to_solid_color(p: &PaintRef<'_>) -> peniko::color::Rgba8 {
+    match p {
+        anyrender::Paint::Solid(c) => c.to_rgba8(),
+        _ => Color::TRANSPARENT.to_rgba8(),
+    }
+}
+
+fn image_brush_to_krilla(brush: &peniko::ImageBrushRef<'_>) -> Option<KrillaImage> {
+    use peniko::ImageFormat;
+    let img = brush.image;
+    if img.width == 0 || img.height == 0 {
+        return None;
+    }
+    let bytes = img.data.data();
+    match img.format {
+        ImageFormat::Rgba8 => Some(KrillaImage::from_rgba8(
+            bytes.to_vec(),
+            img.width,
+            img.height,
+        )),
+        _ => None,
+    }
+}
+
+fn get_or_register_font<'c>(
+    cache: &'c mut HashMap<FontKey, CachedFont>,
+    font_data: &peniko::FontData,
+    normalized_coords: &[NormalizedCoord],
+) -> Option<&'c CachedFont> {
+    let bytes_slice = font_data.data.data();
+    let key = FontKey::new(bytes_slice.as_ptr() as usize, normalized_coords);
+    if !cache.contains_key(&key) {
+        let owned: Vec<u8> = bytes_slice.to_vec();
+
+        let mut gid_to_char: HashMap<u32, char> = HashMap::new();
+        let font_ref_res = FontRef::from_index(&owned, font_data.index);
+        if let Ok(ref font_ref) = font_ref_res {
+            let cmap = font_ref.charmap();
+            for (codepoint, gid) in cmap.mappings() {
+                if let Some(ch) = char::from_u32(codepoint) {
+                    gid_to_char.entry(gid.to_u32()).or_insert(ch);
+                }
+            }
+        }
+
+        let has_variation = normalized_coords.iter().any(|c| *c != 0);
+        let kfont = if has_variation {
+            let design_coords = font_ref_res
+                .as_ref()
+                .ok()
+                .and_then(|fr| normalized_to_design_coords(fr, normalized_coords))
+                .unwrap_or_default();
+            if design_coords.is_empty() {
+                KrillaFont::new(owned.into(), font_data.index)?
+            } else {
+                KrillaFont::new_variable(owned.into(), font_data.index, &design_coords)?
+            }
+        } else {
+            KrillaFont::new(owned.into(), font_data.index)?
+        };
+        cache.insert(
+            key.clone(),
+            CachedFont {
+                font: kfont,
+                gid_to_char: std::rc::Rc::new(gid_to_char),
+            },
+        );
+    }
+    cache.get(&key)
+}
+
+fn normalized_to_design_coords(
+    font_ref: &FontRef<'_>,
+    normalized_coords: &[NormalizedCoord],
+) -> Option<Vec<(KrillaTag, f32)>> {
+    let fvar = font_ref.fvar().ok()?;
+    let axes = fvar.axes().ok()?;
+    if axes.len() != normalized_coords.len() {
+        return None;
+    }
+    let mut out: Vec<(KrillaTag, f32)> = Vec::with_capacity(axes.len());
+    for (axis, ncoord) in axes.iter().zip(normalized_coords.iter()) {
+        let normalized = (*ncoord as f32 / NORMALIZED_COORD_SCALE).clamp(-1.0, 1.0);
+        let min = axis.min_value().to_f64() as f32;
+        let def = axis.default_value().to_f64() as f32;
+        let max = axis.max_value().to_f64() as f32;
+        let design = if normalized >= 0.0 {
+            def + normalized * (max - def)
+        } else {
+            def + normalized * (def - min)
+        };
+        let tag_bytes: [u8; 4] = axis.axis_tag().to_be_bytes();
+        out.push((KrillaTag::new(&tag_bytes), design));
+    }
+    Some(out)
+}
+
+pub(crate) fn push_px_to_pt_scale(surface: &mut Surface<'_>) {
+    const PX_TO_PT: f32 = 72.0 / 96.0;
+    let t = KrillaTransform::from_row(PX_TO_PT, 0.0, 0.0, PX_TO_PT, 0.0, 0.0);
+    surface.push_transform(&t);
+}
+
+pub(crate) fn push_page_clip(surface: &mut Surface<'_>, width: f32, stripe_height: f32) {
+    let mut pb = PathBuilder::new();
+    pb.move_to(0.0, 0.0);
+    pb.line_to(width, 0.0);
+    pb.line_to(width, stripe_height);
+    pb.line_to(0.0, stripe_height);
+    pb.close();
+    if let Some(path) = pb.finish() {
+        surface.push_clip_path(&path, &KrillaFillRule::NonZero);
+    }
+}
+
+pub(crate) fn content_box(
+    paper_width: u32,
+    paper_height: u32,
+    margin_top: u32,
+    margin_right: u32,
+    margin_bottom: u32,
+    margin_left: u32,
+) -> (u32, u32, u32, u32) {
+    let ml = margin_left.min(paper_width.saturating_sub(1));
+    let mr = margin_right.min(paper_width.saturating_sub(ml).saturating_sub(1));
+    let mt = margin_top.min(paper_height.saturating_sub(1));
+    let mb = margin_bottom.min(paper_height.saturating_sub(mt).saturating_sub(1));
+    let width = paper_width.saturating_sub(ml).saturating_sub(mr).max(1);
+    let height = paper_height.saturating_sub(mt).saturating_sub(mb).max(1);
+    (ml, mt, width, height)
+}
+
+pub(crate) fn paint_white_background(
+    surface: &mut krilla::surface::Surface<'_>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    use krilla::color::rgb;
+    use krilla::geom::Rect as KRect;
+    use krilla::num::NormalizedF32;
+    use krilla::paint::{Fill as KFill, FillRule as KFillRule};
+
+    let white = KFill {
+        paint: rgb::Color::new(255, 255, 255).into(),
+        opacity: NormalizedF32::ONE,
+        rule: KFillRule::NonZero,
+    };
+    surface.set_fill(Some(white));
+    if let Some(rect) = KRect::from_xywh(0.0, 0.0, width as f32, height as f32) {
+        let mut pb = krilla::geom::PathBuilder::new();
+        pb.move_to(rect.left(), rect.top());
+        pb.line_to(rect.right(), rect.top());
+        pb.line_to(rect.right(), rect.bottom());
+        pb.line_to(rect.left(), rect.bottom());
+        pb.close();
+        if let Some(path) = pb.finish() {
+            surface.draw_path(&path);
+        }
+    }
+    surface.set_fill(None);
+    Ok(())
+}

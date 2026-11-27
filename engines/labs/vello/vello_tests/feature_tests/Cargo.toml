@@ -1,0 +1,92 @@
+[package]
+name = "vello_gpu_feature_tests"
+description = "Rendering snapshot tests for Vello GPU shader feature combinations"
+categories = ["development-tools::testing", "graphics"]
+keywords = ["testing", "rendering", "snapshots"]
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/linebender/vello"
+publish = false
+autotests = false
+
+[[test]]
+name = "features"
+path = "tests/features.rs"
+
+[dependencies]
+vello_common = { workspace = true, features = ["std", "png", "probe"] }
+vello_gpu = { workspace = true, default-features = false, features = ["probe", "text"] }
+vello_test_support = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+vello_cpu = { version = "0.4.0", path = "../../vello_cpu", default-features = false, features = [
+    "std",
+    "f32_pipeline",
+] }
+wgpu = { workspace = true, default-features = true, optional = true }
+pollster = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-test = { workspace = true }
+web-sys = { workspace = true, features = [
+    "Window",
+    "Document",
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+] }
+
+[features]
+default = []
+wgpu = ["dep:wgpu", "dep:pollster", "vello_gpu/wgpu_default"]
+webgl = ["vello_gpu/webgl"]
+blurred_rounded_rect = ["vello_gpu/blurred_rounded_rect"]
+full_image_support = ["vello_gpu/full_image_support"]
+gradient_sweep = ["vello_gpu/gradient_sweep"]
+
+[lints.rust]
+keyword_idents_2024 = "forbid"
+non_ascii_idents = "forbid"
+non_local_definitions = "forbid"
+unsafe_op_in_unsafe_fn = "forbid"
+elided_lifetimes_in_paths = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+trivial_numeric_casts = "warn"
+unnameable_types = "warn"
+unreachable_pub = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ["cfg(disable_dispatch_sse4_2)", "cfg(disable_dispatch_avx2)", "cfg(disable_dispatch_avx512)"]
+
+[lints.clippy]
+too_many_arguments = "allow"
+allow_attributes_without_reason = "warn"
+cast_possible_truncation = "warn"
+collection_is_never_read = "warn"
+default_trait_access = "warn"
+dbg_macro = "warn"
+debug_assert_with_mut_call = "warn"
+doc_markdown = "warn"
+fn_to_numeric_cast_any = "warn"
+infinite_loop = "warn"
+large_stack_arrays = "warn"
+mismatching_type_param_order = "warn"
+missing_assert_message = "warn"
+missing_fields_in_debug = "warn"
+same_functions_in_if_condition = "warn"
+semicolon_if_nothing_returned = "warn"
+should_panic_without_expect = "warn"
+todo = "warn"
+unseparated_literal_suffix = "warn"
+use_self = "warn"
+cargo_common_metadata = "warn"
+negative_feature_names = "warn"
+redundant_feature_names = "allow"
+wildcard_dependencies = "warn"

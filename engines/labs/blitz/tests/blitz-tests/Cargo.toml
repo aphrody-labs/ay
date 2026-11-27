@@ -1,0 +1,43 @@
+[package]
+name = "blitz-tests"
+description = "Integration tests for Blitz"
+publish = false
+version = "0.3.0-beta.5"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dioxuslabs/blitz"
+categories = ["gui"]
+edition = "2024"
+autotests = false
+rust-version = "1.91.0"
+
+[dev-dependencies]
+# Blitz dependencies
+blitz-test-harness = { workspace = true }
+blitz-dom = { workspace = true, features = ["accessibility", "autofocus", "floats", "system-fonts", "text-transform-icu"] }
+blitz-html = { workspace = true }
+blitz-traits = { workspace = true }
+blitz-paint = { workspace = true, features = ["scrollbars", "svg"] }
+dioxus-native-dom = { workspace = true }
+anyrender = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+
+# DioxusLabs dependencies
+dioxus = { workspace = true }
+dioxus-core = { workspace = true }
+
+# Other dependencies
+style = { workspace = true }
+accesskit = { workspace = true }
+markup5ever = { workspace = true }
+cursor-icon = { workspace = true }
+keyboard-types = { workspace = true }
+taffy = { workspace = true }
+test-that = { workspace = true }
+usvg = { workspace = true }
+
+[lib]
+path = "lib.rs"
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

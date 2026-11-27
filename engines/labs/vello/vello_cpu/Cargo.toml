@@ -1,0 +1,107 @@
+[package]
+autoexamples = false
+name = "vello_cpu"
+version = "0.4.0"
+description = "A CPU-based renderer for Vello, optimized for SIMD and multithreaded execution."
+categories = ["rendering", "graphics"]
+keywords = ["2d", "vector-graphics"]
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/linebender/vello"
+
+[package.metadata.docs.rs]
+all-features = true
+# There are no platform specific docs.
+default-target = "x86_64-unknown-linux-gnu"
+targets = []
+
+[dependencies]
+bytemuck = { workspace = true }
+glifo = { workspace = true, default-features = false, optional = true }
+vello_common = { workspace = true }
+hashbrown = { workspace = true }
+# Required by `#[simd]`, whose expansion refers to `fearless_simd` by name.
+fearless_simd = { workspace = true }
+fearless_simd_macros = { workspace = true }
+png = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true, optional = true }
+ordered-channel = { workspace = true, optional = true, features = ["crossbeam-channel"] }
+rayon = { workspace = true, optional = true }
+thread_local = { workspace = true, optional = true }
+
+[dev-dependencies]
+fearless_simd = { workspace = true, features = ["force_support_fallback"] }
+
+[features]
+# If adding new features, also add to `src/lib.rs`
+default = ["std", "png", "text", "u8_pipeline"]
+# Get floating point functions from the standard library (likely using your target’s libc).
+std = ["vello_common/std", "glifo?/std"]
+# Use floating point implementations from libm.
+libm = ["vello_common/libm", "glifo?/libm"]
+# Allow loading Pixmap from PNG, and drawing png glyphs.
+png = ["std", "dep:png", "vello_common/png", "glifo?/png"]
+# Enable multi-threaded rendering.
+multithreading = [
+    "std",
+    "dep:rayon",
+    "dep:thread_local",
+    "dep:ordered-channel",
+    "dep:crossbeam-channel",
+    "vello_common/multithreading",
+]
+# Add support for text rendering
+text = ["dep:glifo"]
+
+# Speed focussed rendering using u8 math
+u8_pipeline = []
+# Quality focussed rendering using f32 math
+f32_pipeline = []
+# Polynomial fit of the blurred-rect p-norm, replacing per-pixel powf
+# with a degree-7 coefficient table. See the vello_cpu-0.3.0 patch series.
+poly-pnorm = []
+
+[lints.rust]
+keyword_idents_2024 = "forbid"
+non_ascii_idents = "forbid"
+non_local_definitions = "forbid"
+unsafe_op_in_unsafe_fn = "forbid"
+elided_lifetimes_in_paths = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+trivial_numeric_casts = "warn"
+unnameable_types = "warn"
+unreachable_pub = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(disable_dispatch_sse4_2)", "cfg(disable_dispatch_avx2)", "cfg(disable_dispatch_avx512)"] }
+
+[lints.clippy]
+too_many_arguments = "allow"
+allow_attributes_without_reason = "warn"
+cast_possible_truncation = "warn"
+collection_is_never_read = "warn"
+default_trait_access = "warn"
+dbg_macro = "warn"
+debug_assert_with_mut_call = "warn"
+doc_markdown = "warn"
+fn_to_numeric_cast_any = "warn"
+infinite_loop = "warn"
+large_stack_arrays = "warn"
+mismatching_type_param_order = "warn"
+missing_assert_message = "warn"
+missing_fields_in_debug = "warn"
+same_functions_in_if_condition = "warn"
+semicolon_if_nothing_returned = "warn"
+should_panic_without_expect = "warn"
+todo = "warn"
+unseparated_literal_suffix = "warn"
+use_self = "warn"
+cargo_common_metadata = "allow"
+negative_feature_names = "warn"
+redundant_feature_names = "allow"
+wildcard_dependencies = "warn"
+incompatible_msrv = "allow"

@@ -1,0 +1,47 @@
+[package]
+autotests = false
+name = "anyrender_svg"
+description = "Render SVGs with anyrender"
+version = "0.16.0"
+documentation = "https://docs.rs/anyrender-svg"
+repository = "https://github.com/dioxuslabs/anyrender"
+license = "MIT OR Apache-2.0"
+edition = "2024"
+
+[features]
+default = ["text", "image_format_png", "image_format_gif", "image_format_jpeg", "image_format_webp"]
+
+text = ["usvg/text", "usvg/memmap-fonts"]
+
+image = ["dep:image"]
+image_format_png = ["image", "image/png"]
+image_format_jpeg = ["image", "image/jpeg"]
+image_format_gif = ["image", "image/gif"]
+image_format_webp = ["image", "image/webp"]
+
+[dependencies]
+anyrender = { workspace = true }
+peniko = { workspace = true }
+kurbo = { workspace = true }
+usvg = { workspace = true, default-features = false }
+image = { workspace = true, default-features = false, optional = true }
+
+[dev-dependencies]
+anyrender_vello_cpu = { workspace = true }
+anyrender_tiny_skia = { workspace = true }
+
+[[test]]
+name = "clip_shape_rendering"
+path = "tests/clip_shape_rendering.rs"
+
+[[test]]
+name = "clips"
+path = "tests/clips.rs"
+
+[[test]]
+name = "gradients"
+path = "tests/gradients.rs"
+
+[lints.clippy]
+incompatible_msrv = "allow"
+cargo_common_metadata = "allow"

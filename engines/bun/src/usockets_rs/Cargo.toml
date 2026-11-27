@@ -1,0 +1,25 @@
+[package]
+name = "bun_usockets_rs"
+description = "uSockets (packages/bun-usockets) in Rust for the Boa build: the us_* C ABI that bun_uws_sys declares, on epoll, with TLS on rustls."
+version = "0.0.0"
+edition = "2024"
+publish = false
+# A member of the Boa build's workspace, not of Bun's.
+workspace = "../../packages/bun-boa"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+bun_core = { path = "../bun_core" }
+bun_dns = { path = "../dns" }
+bun_threading = { path = "../threading" }
+bun_uws_sys = { path = "../uws_sys" }
+libc = "0.2"
+pki-types = { package = "rustls-pki-types", version = "1", features = ["std"] }
+# Keys under a passphrase: PBES2 (PBKDF2 or scrypt, AES-CBC).
+pkcs8 = { version = "0.11", features = ["encryption", "pem"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-rustcrypto = "0.1.0-pre.0"
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["alloc"] }
+webpki-roots = "1"

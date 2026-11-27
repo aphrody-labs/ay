@@ -1,0 +1,126 @@
+name: Set up kitesurf
+description: Install pnpm 9.15.4, Node 22 and, when requested, the Rust toolchain pinned in rust-toolchain.toml, a Bazel cache and bazelflare.
+inputs:
+  rust:
+    description: Install the pinned Rust toolchain and the rust-cache.
+    required: false
+    default: "false"
+  bazel-cache:
+    description: Restore Bazel's disk and repository caches; the job saves them itself.
+    required: false
+    default: "false"
+  pnpm-cache:
+    description: >-
+      Restore and save pnpm's store with setup-node. Set "false" in a job that runs no pnpm install:
+      on a cache miss, setup-node's post step fails on the store directory that nothing created.
+    required: false
+    default: "true"
+  bazelflare:
+    description: >-
+      With bazel-cache, build on bazelflare (.bazelrc's bazelflare config) when the job has an OIDC
+      token (id-token: write), caching only Bazel's repositories here; without one, build here.
+    required: false
+    default: "false"
+outputs:
+  bazel-cache-key:
+    description: The key the job saves the Bazel caches under.
+    value: ${{ steps.bazel-cache.outputs.cache-primary-key }}
+  bazel-cache-hit:
+    description: "'true' when the restore matched the key exactly, so there is nothing new to save."
+    value: ${{ steps.bazel-cache.outputs.cache-hit }}
+  bazel-cache-paths:
+    description: The paths the job saves the Bazel caches from, as the restore read them.
+    value: ${{ steps.plan.outputs.cache-paths }}
+  bazelflare:
+    description: "'true' when every Bazel command builds on bazelflare."
+    value: ${{ steps.plan.outputs.bazelflare }}
+runs:
+  using: composite
+  steps:
+    # A pull request from a fork gets no OIDC token, so it builds on the runner. On bazelflare the
+    # actions come from its cache, so only the repositories Bazel fetches here are worth restoring.
+    - if: inputs.bazel-cache == 'true'
+      id: plan
+      shell: bash
+      env:
+        WANTS_BAZELFLARE: ${{ inputs.bazelflare }}
+        LOCKS: ${{ hashFiles('MODULE.bazel.lock', 'Cargo.lock', 'pnpm-lock.yaml') }}
+      run: |
+        remote=false
+        if [ "$WANTS_BAZELFLARE" = true ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then remote=true; fi
+        {
+          echo "bazelflare=$remote"
+          if $remote; then
+            echo "cache-key=bazelflare-repo-$RUNNER_OS-$LOCKS"
+            printf 'cache-restore-keys<<EOF\nbazelflare-repo-%s-\nEOF\n' "$RUNNER_OS"
+            printf 'cache-paths<<EOF\n~/.cache/bazel-repo\nEOF\n'
+          else
+            echo "cache-key=bazel-$RUNNER_OS-$LOCKS-$GITHUB_SHA"
+            printf 'cache-restore-keys<<EOF\nbazel-%s-%s-\nbazel-%s-\nEOF\n' "$RUNNER_OS" "$LOCKS" "$RUNNER_OS"
+            printf 'cache-paths<<EOF\n~/.cache/bazel-disk\n~/.cache/bazel-repo\nEOF\n'
+          fi
+        } >> "$GITHUB_OUTPUT"
+    # A cold Bazel build of every lane fills the runner's root disk. Drop SDKs the jobs never use;
+    # keep /opt/hostedtoolcache, where setup-node finds Node.
+    - if: inputs.bazel-cache == 'true' && steps.plan.outputs.bazelflare != 'true'
+      name: Free disk space
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+          /opt/hostedtoolcache/CodeQL /usr/share/swift
+        df -h /
+    - name: Set a git identity
+      shell: bash
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 9.15.4
+        run_install: false
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: ${{ inputs.pnpm-cache == 'true' && 'pnpm' || '' }}
+    - if: inputs.rust == 'true'
+      shell: bash
+      run: rustup show
+    # Holds the cargo clippy output of `pnpm run lint`; Bazel never writes packages/core/target.
+    # Only main saves, so PR runs cannot evict main's entries from the 10 GB repository quota.
+    - if: inputs.rust == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        cache-directories: packages/core/target
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-on-failure: "true"
+    # The runner image ships bazelisk as `bazel`. CI must never rewrite MODULE.bazel.lock: a stale
+    # one is a commit missing its lockfile update.
+    - if: inputs.bazel-cache == 'true'
+      shell: bash
+      env:
+        BAZELFLARE: ${{ steps.plan.outputs.bazelflare }}
+      run: |
+        {
+          echo "common --lockfile_mode=error"
+          echo "common --repository_cache=$HOME/.cache/bazel-repo"
+          if [ "$BAZELFLARE" != true ]; then
+            echo "common --disk_cache=$HOME/.cache/bazel-disk"
+          else
+            echo "common --config=bazelflare"
+            # Only main's own CI may build in the instance every other build falls back to;
+            # bazelflare checks the job's token for the same and refuses any other job there.
+            if [[ $GITHUB_WORKFLOW_REF == "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" &&
+              $GITHUB_EVENT_NAME =~ ^(push|workflow_dispatch)$ ]]; then
+              echo "common --remote_instance_name=trusted"
+            fi
+          fi
+        } >> .bazelrc.user
+    # Restore only: the job saves at its end, from main only (see ci.yml).
+    - if: inputs.bazel-cache == 'true'
+      id: bazel-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.plan.outputs.cache-paths }}
+        key: ${{ steps.plan.outputs.cache-key }}
+        restore-keys: ${{ steps.plan.outputs.cache-restore-keys }}

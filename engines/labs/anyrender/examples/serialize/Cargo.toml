@@ -1,0 +1,16 @@
+[package]
+name = "serialize"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+kurbo = { workspace = true }
+peniko = { workspace = true }
+image = { workspace = true, features = ["png"] }
+anyrender = { workspace = true, features = ["serde"] }
+anyrender_serialize = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+parley = { version = "0.13", default-features = false, features = ["std", "bytemuck"] }
+bytemuck = "1"

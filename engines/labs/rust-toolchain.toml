@@ -1,0 +1,5 @@
+# Same pin as oven-sh/bun (bun's rust-toolchain.toml), so crates move between the two trees unchanged.
+[toolchain]
+channel = "nightly-2026-11-14"
+components = ["rust-src", "rustfmt", "clippy", "llvm-tools"]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "wasm32-unknown-unknown"]

@@ -1,0 +1,17 @@
+[package]
+name = "taffy_test_helpers"
+version = "0.0.0"
+edition = "2024"
+description = "Internal test helpers for taffy's tests"
+repository = "https://github.com/DioxusLabs/taffy"
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+taffy = { path = "../.." }
+
+[lints.clippy]
+incompatible_msrv = "allow"
+cargo_common_metadata = "allow"
+module_inception = "allow"

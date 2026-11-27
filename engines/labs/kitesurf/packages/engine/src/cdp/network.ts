@@ -1,0 +1,283 @@
+// Copyright (c) 2026 Cloudflare, Inc.
+// Licensed under the Apache 2.0 license found in the LICENSE file or at:
+// https://opensource.org/licenses/Apache-2.0
+
+// Implements CDP Network commands for cookies, headers, and request tracking.
+
+import type { TargetState } from "./types.ts";
+import type { DispatchCtx } from "./dispatch.ts";
+import { defineDomain, stub } from "./domain.ts";
+import type { Protocol } from "devtools-protocol";
+import { entryToCdp, setCdpCookie, type CdpCookie, type CookieJar } from "../cookies.ts";
+import {
+  findSessionOwner,
+  jarForContextId,
+  jarForTarget,
+  localStorageForTarget,
+} from "./target.ts";
+import { localStorageOrigin } from "../state/local-storage.ts";
+import { changeLocalStorage } from "./storage-copies.ts";
+
+// SAFETY: Kitesurf's cookies omit priority, sourceScheme and sourcePort, which the protocol's
+// Cookie requires. The assertion keeps the reply as it is; sending them changes the wire.
+function protocolCookies(cookies: CdpCookie[]): Protocol.Network.Cookie[] {
+  return cookies as Protocol.Network.Cookie[];
+}
+
+export const networkDomain = defineDomain("Network", {
+  methods: {
+    "Network.enable": (ctx, req) => {
+      ctx.browser.networkEvents.setEnabled(req.sessionId, true, {
+        maxTotalBufferSize: req.params?.maxTotalBufferSize,
+        maxResourceBufferSize: req.params?.maxResourceBufferSize,
+      });
+      return {};
+    },
+
+    "Network.disable": (ctx, req) => {
+      ctx.browser.networkEvents.setEnabled(req.sessionId, false);
+      return {};
+    },
+
+    "Network.setCacheDisabled": stub,
+    "Network.setBypassServiceWorker": stub,
+
+    "Network.setUserAgentOverride": (ctx, req) => {
+      const ua = typeof req.params?.userAgent === "string" ? req.params.userAgent : "";
+      const resolved = resolveNetworkTarget(ctx, req.sessionId);
+      if (resolved) resolved.userAgentOverride = ua;
+      return {};
+    },
+
+    "Network.setExtraHTTPHeaders": (ctx, req) => {
+      const headers = req.params?.headers ?? {};
+      const sanitized: Record<string, string> = {};
+      for (const [k, v] of Object.entries(headers)) {
+        if (typeof k !== "string" || typeof v !== "string") continue;
+        if (k.toLowerCase().startsWith("x-kitesurf-")) continue;
+        sanitized[k] = v;
+      }
+      const resolved = resolveNetworkTarget(ctx, req.sessionId);
+      if (resolved) resolved.extraHttpHeaders = sanitized;
+      return {};
+    },
+
+    "Network.getAllCookies": (ctx, req) => {
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      return { cookies: protocolCookies(jar.getAll().map(entryToCdp)) };
+    },
+
+    "Network.getCookies": (ctx, req) => {
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      const urls = req.params?.urls;
+      if (!urls || urls.length === 0) {
+        return { cookies: protocolCookies(jar.getAll().map(entryToCdp)) };
+      }
+      const seen = new Set<string>();
+      const out = [];
+      for (const u of urls) {
+        for (const c of jar.getForUrl(u)) {
+          const key = c.host + "\\u0000" + c.path + "\\u0000" + c.name;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(entryToCdp(c));
+        }
+      }
+      return { cookies: protocolCookies(out) };
+    },
+
+    "Network.setCookie": (ctx, req) => {
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      return { success: setCdpCookie(jar, req.params) !== null };
+    },
+
+    "Network.setCookies": (ctx, req) => {
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      const list: unknown = req.params?.cookies;
+      if (Array.isArray(list)) for (const c of list) setCdpCookie(jar, c);
+      return {};
+    },
+
+    "Network.deleteCookies": (ctx, req) => {
+      const p = req.params!;
+      if (!p.name) return {};
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      jar.remove({
+        name: p.name,
+        url: p.url,
+        domain: p.domain,
+        path: p.path,
+      });
+      return {};
+    },
+
+    "Network.clearBrowserCookies": (ctx, req) => {
+      const jar = jarForTarget(ctx, resolveNetworkTarget(ctx, req.sessionId));
+      jar.clear();
+      return {};
+    },
+
+    "Network.clearBrowserCache": stub,
+
+    "Network.emulateNetworkConditionsByRule": () => ({ ruleIds: [] }),
+
+    "Network.getResponseBody": (ctx, req) => {
+      const requestId = req.params!.requestId;
+      const tracker = ctx.browser.networkEvents;
+      // Chrome rejects an id it never issued. Kitesurf keeps fewer bodies than Chrome, so a known
+      // request whose body it dropped answers empty rather than failing a read Chrome would serve.
+      if (!requestId || !tracker.knowsRequest(requestId)) {
+        throw new Error("No resource with given identifier found");
+      }
+      return tracker.getResponseBody(requestId) ?? { body: "", base64Encoded: false };
+    },
+  },
+});
+
+export const storageDomain = defineDomain("Storage", {
+  methods: {
+    "Storage.getCookies": (ctx, req) => {
+      const sjar = jarForContextId(ctx, req.params?.browserContextId);
+      return { cookies: protocolCookies(sjar.getAll().map(entryToCdp)) };
+    },
+
+    "Storage.setCookies": (ctx, req) => {
+      const sjar = jarForContextId(ctx, req.params?.browserContextId);
+      const list: unknown = req.params?.cookies;
+      if (Array.isArray(list)) for (const c of list) setCdpCookie(sjar, c);
+      return {};
+    },
+
+    "Storage.clearCookies": (ctx, req) => {
+      jarForContextId(ctx, req.params?.browserContextId).clear();
+      return {};
+    },
+
+    "Storage.clearDataForOrigin": async (ctx, req) => {
+      const origin = req.params?.origin;
+      const url = typeof origin === "string" ? parseUrl(origin) : null;
+      if (!url) throw new Error(`${String(origin)} is not a valid URL`);
+      await clearOriginData(ctx, req.sessionId, url, req.params?.storageTypes);
+      return {};
+    },
+
+    "Storage.clearDataForStorageKey": async (ctx, req) => {
+      const key = req.params?.storageKey;
+      // A partitioned key ("https://a.test/^0https://b.test") names data Kitesurf never keeps.
+      const partitioned = typeof key === "string" && key.includes("^");
+      const url = typeof key === "string" ? parseUrl(key.split("^", 1)[0] ?? "") : null;
+      if (!url) throw new Error("Invalid Storage Key given.");
+      await clearOriginData(ctx, req.sessionId, partitioned ? null : url, req.params?.storageTypes);
+      return {};
+    },
+  },
+});
+
+export function effectiveExtraHeaders(t: TargetState): Record<string, string> {
+  if (!t.userAgentOverride) return t.extraHttpHeaders;
+  const merged: Record<string, string> = {};
+  for (const [k, v] of Object.entries(t.extraHttpHeaders)) {
+    if (k.toLowerCase() === "user-agent") continue;
+    merged[k] = v;
+  }
+  merged["user-agent"] = t.userAgentOverride;
+  return merged;
+}
+
+// Protocol.Storage.StorageType. Chromium ignores names it does not know and fails only when no
+// name is valid. Kitesurf keeps only cookies and localStorage, so the other types clear nothing.
+const STORAGE_TYPES = new Set([
+  "cookies",
+  "file_systems",
+  "indexeddb",
+  "local_storage",
+  "shader_cache",
+  "websql",
+  "service_workers",
+  "cache_storage",
+  "interest_groups",
+  "shared_storage",
+  "storage_buckets",
+  "all",
+  "other",
+]);
+
+// Storage.clearDataFor*: the browser session clears the default context, a page or frame session
+// its own context. A null `url` validates the request and clears nothing. A localStorage clear
+// reaches the open pages too, without `storage` events, as clearing site data fires none.
+async function clearOriginData(
+  ctx: DispatchCtx,
+  sessionId: string | undefined,
+  url: URL | null,
+  storageTypes: unknown,
+): Promise<void> {
+  const target = storageSessionTarget(ctx, sessionId);
+  const types = new Set(
+    typeof storageTypes === "string"
+      ? storageTypes
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => STORAGE_TYPES.has(t))
+      : [],
+  );
+  if (types.size === 0) throw new Error("No valid storage type specified");
+  if (!url) return;
+  const all = types.has("all");
+  if (all || types.has("cookies")) clearCookiesForHost(jarForTarget(ctx, target), url.hostname);
+  const origin = localStorageOrigin(url.href);
+  if (origin && (all || types.has("local_storage"))) {
+    const storage = localStorageForTarget(ctx, target);
+    await changeLocalStorage(ctx, storage, origin, [{ op: "clear" }], { url: null });
+    // Each tab's sessionStorage is an engine record too, which the next navigation would seed
+    // from: the context's tabs lose the origin's area with its localStorage, as in Chromium.
+    for (const tab of ctx.browser.targets.values()) {
+      if (!tab.sessionStorage || localStorageForTarget(ctx, tab) !== storage) continue;
+      await changeLocalStorage(ctx, tab.sessionStorage, origin, [{ op: "clear" }], { url: null });
+    }
+  }
+}
+
+// The target whose browser context a session names. An unknown session fails rather than fall
+// back to the default context, as jarForContextId does for an unknown context id.
+function storageSessionTarget(
+  ctx: DispatchCtx,
+  sessionId: string | undefined,
+): TargetState | undefined {
+  if (!sessionId) return undefined;
+  const owner = findSessionOwner(ctx, sessionId);
+  if (!owner) throw new Error("Session with given id not found.");
+  return owner.target;
+}
+
+// Every cookie a request to `host` would carry: host-only cookies of the host and domain cookies
+// of the host or a parent domain.
+function clearCookiesForHost(jar: CookieJar, host: string): void {
+  if (!host) return;
+  for (const c of jar.getAll()) {
+    const matches = c.hostOnly ? c.host === host : c.host === host || host.endsWith(`.${c.host}`);
+    if (matches) jar.remove({ name: c.name, domain: c.host, path: c.path });
+  }
+}
+
+function parseUrl(s: string): URL | null {
+  try {
+    return new URL(s);
+  } catch {
+    return null;
+  }
+}
+
+function resolveNetworkTarget(
+  ctx: DispatchCtx,
+  sessionId: string | undefined,
+): TargetState | undefined {
+  if (sessionId) {
+    for (const t of ctx.browser.targets.values()) {
+      if (t.sessions.has(sessionId)) return t;
+    }
+  }
+  for (const t of ctx.browser.targets.values()) {
+    if (t.type === "page") return t;
+  }
+  return undefined;
+}

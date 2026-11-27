@@ -1,0 +1,25 @@
+[package]
+name = "blitz-traits"
+description = "Shared traits and types for Blitz"
+documentation = "https://docs.rs/blitz-traits"
+version = "0.3.0-beta.5"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dioxuslabs/blitz"
+categories = ["gui"]
+edition = "2024"
+rust-version = "1.91.0"
+
+[dependencies]
+atomic_refcell = { workspace = true }
+http = { workspace = true }
+url = { workspace = true }
+bytes = { workspace = true }
+keyboard-types = { workspace = true }
+smol_str = { workspace = true }
+bitflags = { workspace = true }
+cursor-icon = { workspace = true }
+serde = { workspace = true }
+
+[lints.clippy]
+incompatible_msrv = "allow"
+cargo_common_metadata = "allow"

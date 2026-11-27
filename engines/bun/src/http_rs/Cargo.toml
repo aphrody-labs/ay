@@ -1,0 +1,23 @@
+[package]
+name = "bun_http_rs"
+description = "HTTP/1.1 over TCP and rustls without a JavaScript engine: an I/O reactor on mio, a client (redirects, decompression) and a server transport, for fetch, Bun.serve and bun install on the Boa build."
+version = "0.0.0"
+edition = "2024"
+publish = false
+# A member of the Boa build's workspace, not of Bun's.
+workspace = "../../packages/bun-boa"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+bun_brotli = { path = "../brotli" }
+bun_deflate = { path = "../deflate" }
+bun_http1 = { path = "../http1" }
+bun_zstd = { path = "../zstd" }
+mio = { version = "1", features = ["os-poll", "net"] }
+pki-types = { package = "rustls-pki-types", version = "1", features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "logging"] }
+rustls-rustcrypto = "0.1.0-pre.0"
+url = "2"
+webpki-roots = "1"

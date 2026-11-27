@@ -1,0 +1,733 @@
+//! Typed shell variable storage.
+//!
+//! GNU Bash references: `variables.c`, `array.c`, `assoc.c`, and
+//! `builtins/declare.def`. The executor's legacy environment map remains an
+//! adapter while callers migrate to this owner.
+
+#[cfg(debug_assertions)]
+use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShellValue {
+    Scalar(String),
+    IndexedArray(BTreeMap<i64, String>),
+    AssociativeArray(HashMap<String, String>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Variable {
+    pub value: ShellValue,
+    pub exported: bool,
+    pub readonly: bool,
+    pub integer: bool,
+    pub nameref: Option<String>,
+    pub uppercase: bool,
+    pub lowercase: bool,
+}
+
+impl Variable {
+    pub fn scalar(value: impl Into<String>) -> Self {
+        Self {
+            value: ShellValue::Scalar(value.into()),
+            exported: false,
+            readonly: false,
+            integer: false,
+            nameref: None,
+            uppercase: false,
+            lowercase: false,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VariableStore {
+    variables: BTreeMap<String, Variable>,
+    /// rubash#1956: registry of names that may currently hold a
+    /// structured cell, feeding the debug-only command-boundary
+    /// verifier's candidate set. Over-approximation is the safe side
+    /// (a registered scalar costs one lookup at the next boundary and
+    /// is dropped there); under-approximation would blind the net.
+    /// Every mutation method that can create, replace, or destroy a
+    /// cell registers accordingly — the array-directed setters register
+    /// unconditionally, `get_mut` registers conservatively (the caller
+    /// may rewrite the value in place), wholesale `set` registers the
+    /// exact outcome, and removal drops the name. Debug-only state:
+    /// release builds compile the field and its upkeep out entirely,
+    /// like the verifier itself.
+    #[cfg(debug_assertions)]
+    cell_candidates: HashSet<String>,
+}
+
+impl VariableStore {
+    pub fn get(&self, name: &str) -> Option<&Variable> {
+        self.variables.get(name)
+    }
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Variable> {
+        self.note_cell_candidate(name);
+        self.variables.get_mut(name)
+    }
+
+    pub(crate) fn remove(&mut self, name: &str) -> Option<Variable> {
+        self.drop_cell_candidate(name);
+        self.variables.remove(name)
+    }
+
+    pub fn set(&mut self, name: impl Into<String>, variable: Variable) -> Result<(), &'static str> {
+        let name = name.into();
+        if self.get(&name).map_or(false, |old| old.readonly) {
+            return Err("readonly variable");
+        }
+        let is_cell = matches!(
+            variable.value,
+            ShellValue::IndexedArray(_) | ShellValue::AssociativeArray(_)
+        );
+        self.variables.insert(name.clone(), variable);
+        if is_cell {
+            self.note_cell_candidate(&name);
+        } else {
+            self.drop_cell_candidate(&name);
+        }
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    fn note_cell_candidate(&mut self, name: &str) {
+        self.cell_candidates.insert(name.to_string());
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn note_cell_candidate(&mut self, _name: &str) {}
+
+    /// Drop `name` from the cell registry (it provably holds no cell:
+    /// removed, replaced by a scalar, or observed cell-less by the
+    /// verifier). No-op in release builds.
+    pub fn drop_cell_candidate(&mut self, name: &str) {
+        #[cfg(debug_assertions)]
+        self.cell_candidates.remove(name);
+        #[cfg(not(debug_assertions))]
+        let _ = name;
+    }
+
+    /// The registered cell-candidate names (verifier input).
+    #[cfg(debug_assertions)]
+    pub fn cell_candidate_names(&self) -> &HashSet<String> {
+        &self.cell_candidates
+    }
+
+    pub fn set_scalar(
+        &mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<(), &'static str> {
+        self.set(name, Variable::scalar(value))
+    }
+
+    pub fn indexed_element(&self, name: &str, index: i64) -> Option<&str> {
+        match &self.get(name)?.value {
+            ShellValue::IndexedArray(values) => values.get(&index).map(String::as_str),
+            _ => None,
+        }
+    }
+
+    pub fn associative_element(&self, name: &str, key: &str) -> Option<&str> {
+        match &self.get(name)?.value {
+            ShellValue::AssociativeArray(values) => values.get(key).map(String::as_str),
+            _ => None,
+        }
+    }
+
+    pub fn set_indexed_element(
+        &mut self,
+        name: &str,
+        index: i64,
+        value: impl Into<String>,
+    ) -> Result<(), &'static str> {
+        self.note_cell_candidate(name);
+        let variable = self
+            .variables
+            .entry(name.to_string())
+            .or_insert_with(|| Variable {
+                value: ShellValue::IndexedArray(BTreeMap::new()),
+                ..Variable::scalar("")
+            });
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        if matches!(variable.value, ShellValue::Scalar(_)) {
+            variable.value = ShellValue::IndexedArray(BTreeMap::new());
+        }
+        match &mut variable.value {
+            ShellValue::IndexedArray(values) => {
+                values.insert(index, value.into());
+                Ok(())
+            }
+            ShellValue::AssociativeArray(_) => {
+                Err("cannot assign indexed element to associative array")
+            }
+            ShellValue::Scalar(_) => unreachable!(),
+        }
+    }
+
+    pub fn replace_indexed_array<I, V>(&mut self, name: &str, values: I) -> Result<(), &'static str>
+    where
+        I: IntoIterator<Item = V>,
+        V: Into<String>,
+    {
+        self.note_cell_candidate(name);
+        let variable = self
+            .variables
+            .entry(name.to_string())
+            .or_insert_with(|| Variable {
+                value: ShellValue::IndexedArray(BTreeMap::new()),
+                ..Variable::scalar("")
+            });
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        if !matches!(variable.value, ShellValue::IndexedArray(_)) {
+            variable.value = ShellValue::IndexedArray(BTreeMap::new());
+        }
+        let ShellValue::IndexedArray(entries) = &mut variable.value else {
+            unreachable!();
+        };
+        entries.clear();
+        for (index, value) in values.into_iter().enumerate() {
+            entries.insert(index as i64, value.into());
+        }
+        Ok(())
+    }
+
+    /// rubash#616 (plan Phase 1a): replace the structured indexed cell while
+    /// PRESERVING the caller's keys. `replace_indexed_array` is dense by
+    /// position (it enumerates the values), which cannot carry a sparse
+    /// array across — `a=([5]=x [2]=y)` must stay `{2,5}`, not `{0,1}`
+    /// (GNU array.c array_insert keeps the real index). Same readonly
+    /// refusal as the dense form.
+    pub fn replace_indexed_array_entries<I, V>(
+        &mut self,
+        name: &str,
+        entries: I,
+    ) -> Result<(), &'static str>
+    where
+        I: IntoIterator<Item = (i64, V)>,
+        V: Into<String>,
+    {
+        self.note_cell_candidate(name);
+        let variable = self
+            .variables
+            .entry(name.to_string())
+            .or_insert_with(|| Variable {
+                value: ShellValue::IndexedArray(BTreeMap::new()),
+                ..Variable::scalar("")
+            });
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        if !matches!(variable.value, ShellValue::IndexedArray(_)) {
+            variable.value = ShellValue::IndexedArray(BTreeMap::new());
+        }
+        let ShellValue::IndexedArray(values) = &mut variable.value else {
+            unreachable!();
+        };
+        values.clear();
+        for (index, value) in entries {
+            values.insert(index, value.into());
+        }
+        Ok(())
+    }
+
+    /// rubash#616 (plan Phase 1a): extend an ALREADY-structured indexed cell
+    /// by one element without rebuilding the map. Returns `false` when the
+    /// cell is absent, of another shape, readonly, or when the resulting
+    /// size disagrees with `expected_len` (the caller's own parse of the
+    /// mirror it is about to render); the caller then performs the full
+    /// structured sync, which drops a refused cell. The size check keeps the
+    /// "complete or absent" invariant self-healing instead of trusting the
+    /// cell blindly: the element-write loop is the array battery's hot path
+    /// and a full `BTreeMap` rebuild per element made it measurably slower
+    /// than the pre-#616 baseline (GNU array.c:516 `array_insert` appends to
+    /// the ARRAY object in O(1)).
+    pub fn extend_indexed_element(
+        &mut self,
+        name: &str,
+        index: i64,
+        value: &str,
+        expected_len: usize,
+    ) -> bool {
+        self.note_cell_candidate(name);
+        let Some(variable) = self.variables.get_mut(name) else {
+            return false;
+        };
+        if variable.readonly {
+            return false;
+        }
+        let ShellValue::IndexedArray(entries) = &mut variable.value else {
+            return false;
+        };
+        entries.insert(index, value.to_string());
+        entries.len() == expected_len
+    }
+
+    /// Assoc analogue of `extend_indexed_element` for the single-element
+    /// assoc read fast path: extend an ALREADY-structured assoc cell by one
+    /// binding without rebuilding the map. Returns `false` when the cell is
+    /// absent, of another shape, readonly, or when the resulting size
+    /// disagrees with `expected_len` (the caller's own unique-key count);
+    /// the caller then performs the full structured sync, which drops a
+    /// refused cell. GNU assoc.c `assoc_insert` overwrites the binding in
+    /// place — an O(1) hash op, never a table re-serialisation.
+    pub fn extend_associative_element(
+        &mut self,
+        name: &str,
+        key: &str,
+        value: &str,
+        expected_len: usize,
+    ) -> bool {
+        self.note_cell_candidate(name);
+        let Some(variable) = self.variables.get_mut(name) else {
+            return false;
+        };
+        if variable.readonly {
+            return false;
+        }
+        let ShellValue::AssociativeArray(entries) = &mut variable.value else {
+            return false;
+        };
+        entries.insert(key.to_string(), value.to_string());
+        entries.len() == expected_len
+    }
+
+    /// rubash#616 (plan Phase 1a): refresh a complete indexed cell from a
+    /// freshly parsed mirror WITHOUT rebuilding it, when the new map is an
+    /// extension of the current one. This is the append-shaped case the
+    /// compound write path (`a+=(...)`) hits once per iteration; a full
+    /// rebuild there copies every value per write, which made the
+    /// compound-append battery measurably slower than the pre-#616 baseline
+    /// (GNU `array.c:516 array_insert` appends to the ARRAY object and
+    /// `array.h:121` counts it — nothing is re-serialised).
+    ///
+    /// The retained prefix is **verified key-by-key**, not assumed: a cell
+    /// that is not an exact prefix of `parsed` returns `false` and the caller
+    /// performs the full sync. That keeps this a cache-refresh, never a
+    /// second source of truth. Returns `true` only when the cell is now
+    /// exactly `parsed`.
+    pub fn extend_indexed_array_from_parsed(
+        &mut self,
+        name: &str,
+        parsed: &BTreeMap<usize, String>,
+    ) -> bool {
+        self.note_cell_candidate(name);
+        let Some(variable) = self.variables.get_mut(name) else {
+            return false;
+        };
+        if variable.readonly {
+            return false;
+        }
+        let ShellValue::IndexedArray(cell) = &mut variable.value else {
+            return false;
+        };
+        if parsed.len() < cell.len() {
+            return false;
+        }
+        if !cell.iter().zip(parsed.iter()).all(|((a, va), (b, vb))| {
+            i64::try_from(*b).map(|b| b == *a).unwrap_or(false) && va == vb
+        }) {
+            return false;
+        }
+        let tail = parsed
+            .iter()
+            .skip(cell.len())
+            .map(|(index, value)| (i64::try_from(*index).unwrap_or(i64::MAX), value.clone()))
+            .collect::<Vec<_>>();
+        for (index, value) in tail {
+            cell.insert(index, value);
+        }
+        true
+    }
+
+    /// rubash#616 (plan Phase 1b): `(len, max_index)` of a complete indexed
+    /// cell, or `None` when `name` is not an indexed cell. This is GNU's
+    /// `ARRAY` shape — `num_elements` and `max_index` (array.h:30-41) — read
+    /// without touching the mirror render, so the element-write path can
+    /// decide whether a write is an append (index == max_index + 1) in
+    /// O(log n) instead of re-parsing the whole array.
+    pub fn indexed_array_shape(&self, name: &str) -> Option<(usize, Option<i64>)> {
+        match self.get(name).map(|variable| &variable.value) {
+            Some(ShellValue::IndexedArray(values)) => {
+                Some((values.len(), values.keys().next_back().copied()))
+            }
+            _ => None,
+        }
+    }
+
+    /// rubash#616 (plan Phase 1c): the structured cell for `name` — GNU's
+    /// ARRAY object — or `None` when `name` holds no indexed cell. The
+    /// compound-append scan seeds from this instead of re-parsing the rendered
+    /// mirror, so an append-only `a+=(...)` never materialises the whole
+    /// element map (GNU assign_compound_array_list edits the ARRAY object in
+    /// place, arrayfunc.c:700). The 1a invariant — the cell is a COMPLETE
+    /// mirror of the render or absent — is what makes the seed equivalent to
+    /// that parse.
+    pub fn indexed_array_cell(&self, name: &str) -> Option<&BTreeMap<i64, String>> {
+        match self.get(name).map(|variable| &variable.value) {
+            Some(ShellValue::IndexedArray(values)) => Some(values),
+            _ => None,
+        }
+    }
+
+    pub fn replace_associative_array<I, K, V>(
+        &mut self,
+        name: &str,
+        values: I,
+    ) -> Result<(), &'static str>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.note_cell_candidate(name);
+        let variable = self
+            .variables
+            .entry(name.to_string())
+            .or_insert_with(|| Variable {
+                value: ShellValue::AssociativeArray(HashMap::new()),
+                ..Variable::scalar("")
+            });
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        if !matches!(variable.value, ShellValue::AssociativeArray(_)) {
+            variable.value = ShellValue::AssociativeArray(HashMap::new());
+        }
+        let ShellValue::AssociativeArray(entries) = &mut variable.value else {
+            unreachable!();
+        };
+        entries.clear();
+        for (key, value) in values {
+            entries.insert(key.into(), value.into());
+        }
+        Ok(())
+    }
+
+    pub fn set_associative_element(
+        &mut self,
+        name: &str,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<(), &'static str> {
+        self.note_cell_candidate(name);
+        let variable = self
+            .variables
+            .entry(name.to_string())
+            .or_insert_with(|| Variable {
+                value: ShellValue::AssociativeArray(HashMap::new()),
+                ..Variable::scalar("")
+            });
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        if matches!(variable.value, ShellValue::Scalar(_)) {
+            variable.value = ShellValue::AssociativeArray(HashMap::new());
+        }
+        match &mut variable.value {
+            ShellValue::AssociativeArray(values) => {
+                values.insert(key.into(), value.into());
+                Ok(())
+            }
+            ShellValue::IndexedArray(_) => {
+                Err("cannot assign associative element to indexed array")
+            }
+            ShellValue::Scalar(_) => unreachable!(),
+        }
+    }
+
+    pub fn remove_indexed_element(
+        &mut self,
+        name: &str,
+        index: i64,
+    ) -> Result<Option<String>, &'static str> {
+        let Some(variable) = self.get_mut(name) else {
+            return Ok(None);
+        };
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        match &mut variable.value {
+            ShellValue::IndexedArray(values) => Ok(values.remove(&index)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn remove_associative_element(
+        &mut self,
+        name: &str,
+        key: &str,
+    ) -> Result<Option<String>, &'static str> {
+        let Some(variable) = self.get_mut(name) else {
+            return Ok(None);
+        };
+        if variable.readonly {
+            return Err("readonly variable");
+        }
+        match &mut variable.value {
+            ShellValue::AssociativeArray(values) => Ok(values.remove(key)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn unset(&mut self, name: &str) -> Result<Option<Variable>, &'static str> {
+        if self.get(name).map_or(false, |variable| variable.readonly) {
+            return Err("readonly variable");
+        }
+        self.drop_cell_candidate(name);
+        Ok(self.variables.remove(name))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Variable)> {
+        self.variables.iter()
+    }
+
+    /// Import the process environment as exported scalar shell variables.
+    ///
+    /// This is the initial migration boundary: executor writes still update the
+    /// legacy environment mirror, while typed array and attribute state can be
+    /// introduced without changing child-process setup in one step.
+    ///
+    /// The blanket `exported` here is correct only for a RAW process
+    /// environment map (every entry arrived exported, variables.c:511-518).
+    /// Executor birth tables are seeded with the shell's own variables
+    /// before the store is built; those go through
+    /// [`VariableStore::from_var_table`] so seeded names keep their
+    /// unexported provenance (rubash#3108).
+    pub fn from_environment(environment: &HashMap<String, String>) -> Self {
+        let mut store = Self::default();
+        for (name, value) in environment {
+            // GNU variables.c:511-526 (initialize_shell_variables): only
+            // valid identifiers are bound as shell variables; entries with
+            // invalid names (Windows inherits names like
+            // `CommonProgramFiles(x86)`) go into the invisible invalid_env
+            // table (variables.c:3307 bind_invalid_envvar) — exported to
+            // children, never expandable or listable. Rubash keeps those
+            // entries in the executor's env_vars mirror for child-process
+            // passthrough; the typed store only mirrors shell variables.
+            if !is_valid_identifier(name) {
+                continue;
+            }
+            let mut variable = Variable::scalar(value.clone());
+            variable.exported = true;
+            store.variables.insert(name.clone(), variable);
+        }
+        store
+    }
+
+    /// Bind the typed store from a shell variable table whose entries
+    /// carry per-name attribute provenance.
+    ///
+    /// The executor's birth table is NOT a raw process environment:
+    /// `initialize_fresh_shell_env_vars` has already seeded it with
+    /// the shell's own managed variables (BASH_VERSINFO, DIRSTACK,
+    /// BASH_ALIASES, BASH_CMDS, ...) alongside the imported entries.
+    /// GNU's provenance is per-entry — only the entries that arrive
+    /// via the environment are bound att_exported|att_imported
+    /// (variables.c:511-518, initialize_shell_variables); the shell's
+    /// own cells are born without it (variables.c:1010
+    /// make_vers_array; variables.c:1882 init_dynamic_array_var
+    /// registers DIRSTACK with attrs 0). So each entry's `exported`
+    /// comes from the table's own attribute record, the same record
+    /// the env side reads — one source of truth, decided at the
+    /// binding source (rubash#3108; binding the whole seeded table
+    /// exported made every seed name snapshot as exported).
+    pub fn from_var_table(table: &crate::shell::var_table::VarTable) -> Self {
+        let mut store = Self::default();
+        for (name, value) in table.iter() {
+            // Same identifier gate as from_environment
+            // (variables.c:511-526): invalid names never become shell
+            // variables in the typed store either.
+            if !is_valid_identifier(name) {
+                continue;
+            }
+            let mut variable = Variable::scalar(value.clone());
+            variable.exported = table.attr_of(name).exported;
+            store.variables.insert(name.clone(), variable);
+        }
+        store
+    }
+
+    /// Serialize only exported scalar values for a child process.
+    pub fn export_environment(&self) -> HashMap<String, String> {
+        self.variables
+            .iter()
+            .filter_map(|(name, variable)| {
+                if !variable.exported {
+                    return None;
+                }
+                let ShellValue::Scalar(value) = &variable.value else {
+                    return None;
+                };
+                let value = if variable.uppercase {
+                    crate::locale::simple_uppercase(value)
+                } else if variable.lowercase {
+                    crate::locale::simple_lowercase(value)
+                } else {
+                    value.clone()
+                };
+                Some((name.clone(), value))
+            })
+            .collect()
+    }
+}
+
+/// GNU general.c valid_identifier: `[A-Za-z_][A-Za-z0-9_]*` (with the POSIX
+/// function-name restriction compiled out of the 5.3 baseline — see
+/// executor/support_names.rs valid_function_identifier).
+fn is_valid_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first == '_' || first.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sparse_and_associative_values_are_typed() {
+        let mut store = VariableStore::default();
+        let mut indexed = BTreeMap::new();
+        indexed.insert(4, "four".into());
+        store
+            .set(
+                "indexed",
+                Variable {
+                    value: ShellValue::IndexedArray(indexed),
+                    ..Variable::scalar("")
+                },
+            )
+            .unwrap();
+        let mut associative = HashMap::new();
+        associative.insert("key".into(), "value".into());
+        store
+            .set(
+                "assoc",
+                Variable {
+                    value: ShellValue::AssociativeArray(associative),
+                    ..Variable::scalar("")
+                },
+            )
+            .unwrap();
+        assert!(matches!(
+            store.get("indexed").unwrap().value,
+            ShellValue::IndexedArray(_)
+        ));
+        assert!(matches!(
+            store.get("assoc").unwrap().value,
+            ShellValue::AssociativeArray(_)
+        ));
+    }
+
+    #[test]
+    fn export_is_an_adapter_not_array_storage() {
+        let mut store = VariableStore::default();
+        let mut variable = Variable::scalar("mixed");
+        variable.exported = true;
+        variable.uppercase = true;
+        store.set("value", variable).unwrap();
+        assert_eq!(store.export_environment()["value"], "MIXED");
+    }
+
+    // GNU variables.c:511-526: inherited entries whose names are not valid
+    // identifiers (Windows `CommonProgramFiles(x86)`) never become shell
+    // variables (niubash issue #102).
+    #[test]
+    fn from_environment_skips_invalid_identifier_names() {
+        let mut environment = HashMap::new();
+        environment.insert("VALID_NAME".to_string(), "kept".to_string());
+        environment.insert("CommonProgramFiles(x86)".to_string(), "dropped".to_string());
+        environment.insert(
+            "BASH_FUNC_rm%%".to_string(),
+            "() { rm \"$@\"; }".to_string(),
+        );
+        environment.insert("WITH SPACE".to_string(), "dropped".to_string());
+        environment.insert("1STARTS_DIGIT".to_string(), "dropped".to_string());
+        let store = VariableStore::from_environment(&environment);
+        assert_eq!(store.get("VALID_NAME").map(|v| v.exported), Some(true));
+        assert!(store.get("CommonProgramFiles(x86)").is_none());
+        assert!(store.get("BASH_FUNC_rm%%").is_none());
+        assert!(store.get("WITH SPACE").is_none());
+        assert!(store.get("1STARTS_DIGIT").is_none());
+    }
+
+    // rubash#3108: the table-aware binding takes each entry's
+    // exported provenance from the table's attribute record — a
+    // seeded name the table never marked exported binds unexported
+    // and an imported (marked) name binds exported. The serialized
+    // marker key itself stays in the table's values (it is the
+    // transport encoding, VarTable::from keeps the strings) and
+    // binds unexported like any other unmarked entry.
+    #[test]
+    fn from_var_table_binds_exported_from_table_attrs() {
+        let mut values = HashMap::new();
+        values.insert("IMPORTED_NAME".to_string(), "kept".to_string());
+        values.insert("SEEDED_NAME".to_string(), "seed".to_string());
+        values.insert(
+            crate::executor::types::EXPORTED_VARS.to_string(),
+            "IMPORTED_NAME".to_string(),
+        );
+        let table = crate::shell::var_table::VarTable::from_values(values);
+        let store = VariableStore::from_var_table(&table);
+        assert_eq!(
+            store.get("IMPORTED_NAME").map(|v| v.exported),
+            Some(true),
+            "table-marked name binds exported"
+        );
+        assert_eq!(
+            store.get("SEEDED_NAME").map(|v| v.exported),
+            Some(false),
+            "unmarked seed name binds unexported"
+        );
+        // The serialized marker key itself is a valid identifier and
+        // binds like the old from_environment bound it (the transport
+        // string stays in the table's values) — but nothing marks it
+        // exported, so it now binds unexported too.
+        assert_eq!(
+            store
+                .get(crate::executor::types::EXPORTED_VARS)
+                .map(|v| v.exported),
+            Some(false),
+            "marker key binds unexported"
+        );
+    }
+
+    #[test]
+    fn element_apis_preserve_sparse_and_readonly_semantics() {
+        let mut store = VariableStore::default();
+        store.set_indexed_element("items", 3, "three").unwrap();
+        store.set_indexed_element("items", 9, "nine").unwrap();
+        assert_eq!(store.indexed_element("items", 3), Some("three"));
+        assert_eq!(store.indexed_element("items", 4), None);
+        assert_eq!(
+            store.remove_indexed_element("items", 3).unwrap(),
+            Some("three".into())
+        );
+        assert_eq!(store.indexed_element("items", 3), None);
+
+        store
+            .set_associative_element("map", "a b]", "value")
+            .unwrap();
+        assert_eq!(store.associative_element("map", "a b]"), Some("value"));
+
+        store.get_mut("items").unwrap().readonly = true;
+        assert_eq!(
+            store.set_indexed_element("items", 1, "blocked"),
+            Err("readonly variable")
+        );
+        assert_eq!(
+            store.remove_indexed_element("items", 9),
+            Err("readonly variable")
+        );
+    }
+}

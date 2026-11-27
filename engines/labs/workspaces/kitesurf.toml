@@ -1,0 +1,61 @@
+[workspace]
+resolver = "2"
+members = ["packages/core", "packages/renderer-core", "packages/scene-host-wasm"]
+exclude = ["scripts/memprof-rewriter", "vendor/wasm-memprof/instrumentor"]
+
+# A module with submodules is `foo.rs` beside `foo/`, never `foo/mod.rs`.
+[workspace.lints.clippy]
+mod_module_files = "warn"
+
+[workspace.dependencies]
+# anyrender, vello_cpu, parley, taffy, blitz and boa are labs' in-tree crates, carrying kitesurf's vendor patch
+# series (ported from scripts/patches/, which stays as their provenance); the root [patch.crates-io] points here.
+anyrender = { version = "0.15", default-features = false }
+anyrender_vello_cpu = { version = "0.19", default-features = false }
+vello_cpu = { version = "0.4", default-features = false, features = [
+  "std",
+  "text",
+  "u8_pipeline",
+  "poly-pnorm",
+] }
+peniko = { version = "0.6", default-features = false }
+kurbo = { version = "0.13", default-features = false }
+skrifa = "0.49"
+krilla = { version = "0.8", default-features = false, features = ["raster-images", "simple-text"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+jpeg-encoder = { version = "0.7", default-features = false }
+png = { version = "0.18", default-features = false }
+fdeflate = "0.3.7"
+crc32fast = "1"
+wuff = "0.2"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+smallvec = "1.16.6"
+serde_json = "1"
+
+wasm-bindgen = "=0.2.127"
+js-sys = "0.3.107"
+console_error_panic_hook = "0.1"
+
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-core = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-opentelemetry = { version = "0.33", default-features = false }
+opentelemetry = { version = "0.32", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.32", default-features = false, features = ["trace"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+# Annex B supplies legacy builtins used by real pages, without Intl/ICU.
+boa_engine = { version = "0.22", default-features = false, features = ["annex-b", "js"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.release.package.write-fonts]
+opt-level = 0
+
+[profile.release-test]
+inherits = "release"
+lto = "off"
+codegen-units = 16

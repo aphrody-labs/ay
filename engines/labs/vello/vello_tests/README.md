@@ -1,0 +1,88 @@
+<div align="center">
+
+# Vello Tests
+
+[![Apache 2.0 or MIT license.](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](#license)
+\
+[![Linebender Zulip chat.](https://img.shields.io/badge/Linebender-%23vello-blue?logo=Zulip)](https://xi.zulipchat.com/#narrow/channel/197075-vello) [![GitHub Actions CI status.](https://img.shields.io/github/actions/workflow/status/linebender/vello/ci.yml?logo=github&label=CI)](https://github.com/linebender/vello/actions)
+
+</div>
+
+This is a development-only crate for testing the Sparse Strips renderers across
+a corpus of reference images:
+
+- CPU
+- WGPU
+- WASM32 WebGL
+
+The `vello_test` proc macro will create a snapshot test for each supported
+renderer target. See the below example usage.
+
+```rs
+// Draws a filled triangle into a 125x125 scene.
+#[vello_test(width = 125, height = 125)]
+fn filled_triangle(ctx: &mut impl Renderer) {
+    let path = {
+        let mut path = BezPath::new();
+        path.move_to((5.0, 5.0));
+        path.line_to((95.0, 50.0));
+        path.line_to((5.0, 95.0));
+        path.close_path();
+
+        path
+    };
+
+    ctx.set_paint(LIME);
+    ctx.fill_path(&path);
+}
+```
+
+See all the attributes that can be passed to `vello_test` in
+[`vello_dev_macros/src/test.rs`](vello_dev_macros/src/test.rs).
+
+Tolerances, allowed differing pixels and skips can be overridden for specific
+platforms. A value in a platform block replaces the base value on that platform:
+
+```rs
+#[vello_test(gpu_tolerance = 1, windows(gpu_tolerance = 3), macos(skip_gpu))]
+#[vello_test(cfg_attr(all(target_os = "linux", target_arch = "aarch64"), diff_pixels = 4))]
+```
+
+`windows`, `macos`, `linux` and `wasm` are shorthands; `cfg_attr` takes any
+`cfg` predicate. Platforms are matched against the compilation target, so the
+WebGL tests match `wasm` whatever OS the browser runs on.
+
+To disable a test on some platforms, skip it there; platforms that are not
+mentioned run it as usual. This test runs everywhere except on Linux and in
+WebGL, with a higher GPU tolerance on macOS:
+
+```rs
+#[vello_test(
+    linux(ignore = "differs on Mesa"),
+    wasm(skip_gpu),
+    macos(gpu_tolerance = 2),
+)]
+```
+
+Targets without a shorthand, such as Android, still run such a test. To run a
+test only on some platforms, ignore it everywhere else:
+
+```rs
+#[vello_test(cfg_attr(not(any(target_os = "windows", target_os = "macos")), ignore = "Windows and macOS only"))]
+```
+
+## Testing WebGL on the Browser
+
+Requirements:
+
+- on MacOS, a minimum Clang major version of 20 is required.
+
+To run the `vello_tests` suite including the WebGL tests:
+
+```sh
+wasm-pack test --headless --chrome --features webgl --release
+```
+
+To debug the output images in webgl, run the same command without `--headless`.
+Any tests that fail will have their diff image appended to the bottom of the
+page.

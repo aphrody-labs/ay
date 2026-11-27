@@ -1,0 +1,320 @@
+use std::sync::Arc;
+
+use anyrender::{
+    AntiAliasing, Filter, MaskMode, NormalizedCoord, Paint, PaintRef, PaintScene, RenderContext,
+    ResourceId,
+};
+use kurbo::{Affine, Rect, Shape, Stroke};
+use peniko::{
+    BlendMode, BrushRef, Color, Compose, Fill, FontData, ImageBrush, ImageData, Mix, StyleRef,
+};
+use rustc_hash::FxHashMap;
+use vello::Renderer as VelloRenderer;
+use wgpu::Texture;
+use wgpu_context::DeviceHandle;
+
+pub struct VelloScenePainter<'r, 's> {
+    pub(crate) renderer: Option<&'r mut VelloRenderer>,
+    pub(crate) device_handle: Option<&'r DeviceHandle>,
+    pub(crate) texture_handles: Option<&'r mut FxHashMap<ResourceId, ImageData>>,
+    pub(crate) inner: &'s mut vello::Scene,
+    /// Pattern tiles converted to vello scenes in this frame, by pattern id.
+    pub(crate) pattern_scenes: FxHashMap<u64, vello::Scene>,
+    /// The area of the scene that is rendered, if known. Pattern tiles outside it are skipped.
+    pub(crate) cull_rect: Option<Rect>,
+}
+
+impl RenderContext for VelloScenePainter<'_, '_> {
+    fn try_register_custom_resource(
+        &mut self,
+        resource: Box<dyn std::any::Any>,
+    ) -> Result<ResourceId, anyrender::RegisterResourceError> {
+        if let Some(renderer) = &mut self.renderer
+            && let Some(texture_handles) = &mut self.texture_handles
+        {
+            if let Ok(texture) = resource.downcast::<Texture>() {
+                let id = ResourceId::new();
+                texture_handles.insert(id, renderer.register_texture(*texture));
+                Ok(id)
+            } else {
+                Err(anyrender::RegisterResourceErrorKind::UnsupportedResourceKind.into())
+            }
+        } else {
+            Err(anyrender::RegisterResourceErrorKind::Unimplemented.into())
+        }
+    }
+
+    fn unregister_resource(&mut self, resource_id: ResourceId) {
+        if let Some(renderer) = &mut self.renderer
+            && let Some(texture_handles) = &mut self.texture_handles
+            && let Some(handle) = texture_handles.remove(&resource_id)
+        {
+            renderer.unregister_texture(handle);
+        }
+    }
+
+    fn renderer_specific_context(&self) -> Option<Box<dyn std::any::Any>> {
+        self.device_handle
+            .map(|device_handle| Box::new(device_handle.clone()) as _)
+    }
+}
+
+impl VelloScenePainter<'_, '_> {
+    pub fn new<'s>(scene: &'s mut vello::Scene) -> VelloScenePainter<'static, 's> {
+        VelloScenePainter {
+            renderer: None,
+            device_handle: None,
+            texture_handles: None,
+            inner: scene,
+            pattern_scenes: FxHashMap::default(),
+            cull_rect: None,
+        }
+    }
+}
+
+impl VelloScenePainter<'_, '_> {
+    /// Takes the vello scene for one tile of `pattern`, converting it on first use in this
+    /// frame. Put it back with `pattern_scenes.insert` when done.
+    fn take_pattern_scene(&mut self, pattern: &anyrender::Pattern) -> vello::Scene {
+        if let Some(scene) = self.pattern_scenes.remove(&pattern.id()) {
+            return scene;
+        }
+        let mut scene = vello::Scene::new();
+        let mut painter = VelloScenePainter {
+            renderer: None,
+            device_handle: None,
+            texture_handles: self.texture_handles.as_deref_mut(),
+            inner: &mut scene,
+            pattern_scenes: std::mem::take(&mut self.pattern_scenes),
+            cull_rect: Some(pattern.tile()),
+        };
+        pattern.scene().replay(&mut painter, Affine::IDENTITY);
+        self.pattern_scenes = painter.pattern_scenes;
+        scene
+    }
+}
+
+impl PaintScene for VelloScenePainter<'_, '_> {
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+
+    fn push_layer(
+        &mut self,
+        fill: Fill,
+        blend: impl Into<BlendMode>,
+        alpha: f32,
+        transform: Affine,
+        clip: &impl Shape,
+        _filter: Option<Arc<Filter>>,
+        _backdrop_filter: Option<Arc<Filter>>,
+    ) {
+        self.inner.push_layer(fill, blend, alpha, transform, clip);
+    }
+
+    fn push_clip_layer(&mut self, fill: Fill, transform: Affine, clip: &impl Shape) {
+        self.inner.push_clip_layer(fill, transform, clip);
+    }
+
+    fn push_mask_layer(
+        &mut self,
+        fill: Fill,
+        mode: MaskMode,
+        transform: Affine,
+        clip: &impl Shape,
+    ) {
+        let blend = BlendMode::new(Mix::Normal, Compose::DestIn);
+
+        // Everything outside of the clip is masked out
+        let everything = Rect::new(-1e6, -1e6, 1e6, 1e6);
+        self.inner
+            .push_layer(Fill::NonZero, blend, 1.0, Affine::IDENTITY, &everything);
+        self.inner.fill(fill, transform, Color::BLACK, None, clip);
+        self.inner.pop_layer();
+
+        match mode {
+            MaskMode::Alpha => self.inner.push_layer(fill, blend, 1.0, transform, clip),
+            MaskMode::Luminance => {
+                self.inner
+                    .push_luminance_mask_layer(fill, 1.0, transform, clip);
+            }
+        }
+    }
+
+    fn pop_layer(&mut self) {
+        self.inner.pop_layer();
+    }
+
+    fn stroke<'a>(
+        &mut self,
+        style: &Stroke,
+        transform: Affine,
+        paint_ref: impl Into<PaintRef<'a>>,
+        brush_transform: Option<Affine>,
+        shape: &impl Shape,
+        _anti_aliasing: AntiAliasing,
+    ) {
+        let paint_ref: anyrender::PaintRef<'a> = paint_ref.into();
+        if let anyrender::Paint::Pattern(pattern) = paint_ref {
+            let tile_scene = self.take_pattern_scene(pattern);
+            let cull_rect = self.cull_rect;
+            anyrender::stroke_pattern_tiles_with(
+                self,
+                pattern,
+                style,
+                transform,
+                brush_transform,
+                shape,
+                cull_rect,
+                |painter, tile_transform| painter.inner.append(&tile_scene, Some(tile_transform)),
+            );
+            self.pattern_scenes.insert(pattern.id(), tile_scene);
+            return;
+        }
+        let brush_ref: BrushRef<'_> = paint_ref.into();
+        self.inner
+            .stroke(style, transform, brush_ref, brush_transform, shape);
+    }
+
+    fn fill<'a>(
+        &mut self,
+        style: Fill,
+        transform: Affine,
+        paint: impl Into<PaintRef<'a>>,
+        brush_transform: Option<Affine>,
+        shape: &impl Shape,
+        _anti_aliasing: AntiAliasing,
+    ) {
+        let paint: anyrender::PaintRef<'a> = paint.into();
+        if let anyrender::Paint::Pattern(pattern) = paint {
+            let tile_scene = self.take_pattern_scene(pattern);
+            let cull_rect = self.cull_rect;
+            anyrender::fill_pattern_tiles_with(
+                self,
+                pattern,
+                style,
+                transform,
+                brush_transform,
+                shape,
+                cull_rect,
+                |painter, tile_transform| painter.inner.append(&tile_scene, Some(tile_transform)),
+            );
+            self.pattern_scenes.insert(pattern.id(), tile_scene);
+            return;
+        }
+        let brush_ref: BrushRef<'_> = match paint {
+            Paint::Solid(color) => BrushRef::Solid(color),
+            Paint::Gradient(gradient) => BrushRef::Gradient(gradient),
+            Paint::Image(image) => BrushRef::Image(image),
+            Paint::Resource(brush) => {
+                let resource_id = brush.image;
+                if let Some(texture_handle) = self
+                    .texture_handles
+                    .as_ref()
+                    .and_then(|texture_handles| texture_handles.get(&resource_id))
+                {
+                    peniko::Brush::Image(ImageBrush {
+                        image: texture_handle,
+                        sampler: brush.sampler,
+                    })
+                } else {
+                    BrushRef::Solid(Color::TRANSPARENT)
+                }
+            }
+            Paint::Custom(_) | Paint::Pattern(_) => BrushRef::Solid(Color::TRANSPARENT),
+        };
+
+        self.inner
+            .fill(style, transform, brush_ref, brush_transform, shape);
+    }
+
+    fn draw_glyphs<'a, 's: 'a>(
+        &'a mut self,
+        font: &'a FontData,
+        font_size: f32,
+        hint: bool,
+        normalized_coords: &'a [NormalizedCoord],
+        embolden: kurbo::Vec2,
+        style: impl Into<StyleRef<'a>>,
+        paint: impl Into<PaintRef<'a>>,
+        brush_alpha: f32,
+        transform: Affine,
+        glyph_transform: Option<Affine>,
+        glyphs: impl Iterator<Item = anyrender::Glyph> + Clone,
+        _anti_aliasing: AntiAliasing,
+    ) {
+        let paint: anyrender::PaintRef<'a> = paint.into();
+        if let anyrender::Paint::Pattern(pattern) = paint {
+            let tile_scene = self.take_pattern_scene(pattern);
+            let cull_rect = self.cull_rect;
+            anyrender::draw_glyphs_pattern_tiles_with(
+                self,
+                pattern,
+                font,
+                font_size,
+                hint,
+                normalized_coords,
+                embolden,
+                style,
+                brush_alpha,
+                transform,
+                glyph_transform,
+                glyphs,
+                cull_rect,
+                |painter, tile_transform| painter.inner.append(&tile_scene, Some(tile_transform)),
+            );
+            self.pattern_scenes.insert(pattern.id(), tile_scene);
+            return;
+        }
+        let brush_ref: BrushRef<'_> = paint.into();
+        self.inner
+            .draw_glyphs(font)
+            .font_size(font_size)
+            .hint(hint)
+            .normalized_coords(normalized_coords)
+            .font_embolden(vello::FontEmbolden::new(kurbo::Diagonal2::new(
+                embolden.x, embolden.y,
+            )))
+            .brush(brush_ref)
+            .brush_alpha(brush_alpha)
+            .transform(transform)
+            .glyph_transform(
+                glyph_transform.map(|transform| Affine::FLIP_Y * transform * Affine::FLIP_Y),
+            )
+            .draw(
+                style,
+                glyphs.map(|g: anyrender::Glyph| vello::Glyph {
+                    id: g.id,
+                    x: g.x,
+                    y: g.y,
+                }),
+            );
+    }
+
+    fn draw_box_shadow(
+        &mut self,
+        transform: Affine,
+        box_shape: &anyrender::NonUniformRoundedRect,
+        offset: kurbo::Vec2,
+        spread: f64,
+        std_dev: f64,
+        color: Color,
+        kind: anyrender::BoxShadowKind,
+    ) {
+        let geometry = anyrender::BoxShadowGeometry::new(box_shape, offset, spread, std_dev, kind);
+        if geometry.std_dev == 0.0 {
+            geometry.draw_unblurred(self, transform, color);
+            return;
+        }
+        // TODO: draw shadows with matching individual radii instead of averaging them
+        self.inner.draw_blurred_rounded_rect_in(
+            &geometry.area,
+            transform,
+            geometry.shadow.rect,
+            color,
+            geometry.shadow.average_radius(),
+            geometry.std_dev,
+            geometry.is_inset(),
+        );
+    }
+}

@@ -1,0 +1,31 @@
+// `import … from "bun"`: the global `Bun` that js/bun.ts installs.
+const B = (globalThis as any).Bun;
+export default B;
+export const {
+  version,
+  revision,
+  env,
+  argv,
+  main,
+  file,
+  write,
+  stdin,
+  stdout,
+  stderr,
+  sleep,
+  sleepSync,
+  which,
+  unsafe,
+  nanoseconds,
+  cwd,
+  semver,
+  serve,
+  fetch,
+  gc,
+  readableStreamToText,
+  readableStreamToBytes,
+  readableStreamToArrayBuffer,
+  readableStreamToJSON,
+  readableStreamToBlob,
+  readableStreamToArray,
+} = B;

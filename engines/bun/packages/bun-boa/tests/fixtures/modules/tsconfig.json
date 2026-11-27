@@ -1,0 +1,6 @@
+{
+  // Comments and trailing commas, as tsconfig.json has them.
+  "compilerOptions": {
+    "paths": { "mapped": ["./lib/mapped.ts"], "lib/*": ["./lib/*"], },
+  },
+}

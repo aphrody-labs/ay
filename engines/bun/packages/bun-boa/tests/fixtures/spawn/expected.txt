@@ -1,0 +1,87 @@
+no arguments: throws TypeError: cmd must be an array (ERR_INVALID_ARG_TYPE)
+a number: throws TypeError: cmd must be an array (ERR_INVALID_ARG_TYPE)
+no cmd: throws TypeError: cmd must be an array (ERR_INVALID_ARG_TYPE)
+empty cmd: throws TypeError: cmd must not be empty (ERR_INVALID_ARG_TYPE)
+not in PATH: throws Error: Executable not found in $PATH: "nonexistent-command-of-bun-boa" (ENOENT)
+no such file: throws Error: ENOENT: no such file or directory, posix_spawn '/nonexistent/bun-boa' (ENOENT)
+echo: {"exitCode":0,"stdout":"<hi\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+inherited stdout: {"exitCode":0,"stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+exit code and stderr: {"exitCode":3,"stdout":"<out\n>","stderr":"<err\n>","success":false,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+killed by a signal: {"exitCode":null,"signalCode":"SIGKILL","stdout":"<>","stderr":"<>","success":false,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+stdin bytes: {"exitCode":0,"stdout":"<in>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+stdin pipe: {"exitCode":0,"stdout":"<>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+stdin Blob: {"exitCode":0,"stdout":"<blob>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+stdin DataView: {"exitCode":0,"stdout":"<AB>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+stdin Response: {"exitCode":0,"stdout":"<response>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+timeout: {"exitCode":null,"signalCode":"SIGTERM","stdout":"<>","stderr":"<>","success":false,"exitedDueToTimeout":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+maxBuffer: {"exitCode":null,"signalCode":"SIGTERM","stderr":"<>","success":false,"exitedDueToMaxBuffer":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+killSignal SIGFOO: throws TypeError: signal must be one of 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGSTKFLT', 'SIGCHLD', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPWR' or 'SIGSYS' (ERR_INVALID_ARG_TYPE)
+killSignal 0: throws TypeError: Unknown signal: 0 (ERR_UNKNOWN_SIGNAL)
+killSignal 9.5: throws TypeError: Unknown signal (ERR_INVALID_ARG_TYPE)
+killSignal 40: throws TypeError: Invalid signal: must be < 32 (ERR_INVALID_ARG_TYPE)
+timeout -1: throws RangeError: The value of "timeout" is out of range. It must be >= 0 and <= 9007199254740991. Received -1 (ERR_OUT_OF_RANGE)
+timeout NaN: throws RangeError: The value of "timeout" is out of range. It must be a non-negative integer. Received NaN (ERR_OUT_OF_RANGE)
+timeout 1.5: throws TypeError: The "timeout" property must be of type integer. Received number (ERR_INVALID_ARG_TYPE)
+timeout string: throws TypeError: The "timeout" property must be of type number. Received string (ERR_INVALID_ARG_TYPE)
+uid string: throws TypeError: The "uid" property must be of type number. Received string (ERR_INVALID_ARG_TYPE)
+uid 2**40: throws RangeError: The value of "uid" is out of range. It must be >= -2147483648 and <= 2147483647. Received 1099511627776 (ERR_OUT_OF_RANGE)
+stdout bogus: throws TypeError: stdio must be an array of 'inherit', 'pipe', 'ignore', Bun.file(pathOrFd), number, or null (ERR_INVALID_ARG_TYPE)
+stdout Blob: throws TypeError: Blobs are immutable, and cannot be used for stdout/stderr (ERR_INVALID_ARG_TYPE)
+stdout 0: throws TypeError: stdin cannot be used for stdout or stderr (ERR_INVALID_ARG_TYPE)
+stdin 1: throws TypeError: stdout and stderr cannot be used for stdin (ERR_INVALID_ARG_TYPE)
+stdin -1: throws TypeError: file descriptor must be a positive integer (ERR_INVALID_ARG_TYPE)
+stdin object: throws TypeError: stdio must be an array of 'inherit', 'ignore', or null (ERR_INVALID_ARG_TYPE)
+stdio string: throws TypeError: stdio must be an array (ERR_INVALID_ARG_TYPE)
+env number: throws TypeError: env must be an object (ERR_INVALID_ARG_TYPE)
+env: {"exitCode":0,"stdout":"<bar\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+env without PATH: {"exitCode":0,"stdout":"<>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+process.env: {"exitCode":0,"stdout":"<\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+cwd: {"exitCode":0,"stdout":"</\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+missing cwd: throws Error: ENOENT: no such file or directory, posix_spawn 'pwd' (ENOENT)
+NUL in a command: throws TypeError: The argument 'args[0]' must be a string without null bytes. Received "ech\u0000o" (ERR_INVALID_ARG_VALUE)
+NUL in an argument: throws TypeError: The argument 'args[1]' must be a string without null bytes. Received "a\0b" (ERR_INVALID_ARG_VALUE)
+NUL in argv0: throws TypeError: The property 'options.argv0' must be a string without null bytes. Received "a\u0000b" (ERR_INVALID_ARG_VALUE)
+NUL in env: throws TypeError: The property 'options.env['A']' must be a string without null bytes. Received "1\0" (ERR_INVALID_ARG_VALUE)
+argv0: {"exitCode":0,"stdout":"<custom\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+arguments are strings: {"exitCode":0,"stdout":"<1 [object Object] null\n>","stderr":"<>","success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+onExit not a function: throws TypeError: onExit must be a function or undefined (ERR_INVALID_ARG_TYPE)
+terminal: throws TypeError: terminal option is only supported for Bun.spawn, not Bun.spawnSync (ERR_INVALID_ARG_TYPE)
+ignored outputs: {"exitCode":0,"success":true,"pid":"number","resourceUsage":["contextSwitches","cpuTime","maxRSS","messages","ops","shmSize","signalCount","swapCount"]}
+keys: ["exitCode","stdout","stderr","success","resourceUsage","pid"]
+Buffer: true
+cpuTime: ["bigint","bigint","bigint"]
+which sh: true
+which nothing: null
+which with PATH: null
+which(): null
+which.length: 1
+kill(): throws TypeError: The "pid" argument must be of type number. Received undefined (ERR_INVALID_ARG_TYPE)
+kill('x'): throws TypeError: The "pid" argument must be of type number. Received type string ('x') (ERR_INVALID_ARG_TYPE)
+kill(1.5): throws TypeError: The "pid" argument must be of type number. Received type number (1.5) (ERR_INVALID_ARG_TYPE)
+kill of no process: throws SystemError: kill() failed: ESRCH: No such process (ESRCH)
+kill SIGFOO: throws TypeError: Unknown signal: SIGFOO (ERR_UNKNOWN_SIGNAL)
+kill {}: throws TypeError: The "signal" argument must be of type string or number. Received an instance of Object (ERR_INVALID_ARG_TYPE)
+kill 0: true
+spawn: false null null number undefined [null,null,null]
+exited: 3 3 true
+output: "out\n" "err\n"
+kill: false 143 null SIGTERM true
+kill 9: 137 SIGKILL
+stdin: 5 5
+cat: hello
+onExit before exited: 0
+onExit: 4 true 4 null undefined
+resourceUsage: object
+inherit: undefined 0
+ignore: undefined undefined undefined 0
+Blob stdin: undefined blobin
+json: {"a":1}
+fd: 2 0
+timeout: 143 SIGTERM
+toStringTag: [object Subprocess]
+stream: true true
+getReader: ab Uint8Array
+for await: iterated
+Response: response
+bytes: "<xy>"
+large: 300000 0

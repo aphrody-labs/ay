@@ -1,0 +1,15 @@
+[profile.release]
+lto = true
+panic = 'abort'
+
+[workspace]
+members = [
+    "scripts/gentest",
+    "scripts/getchrome",
+    "scripts/format-fixtures",
+    "scripts/import-yoga-tests",
+    "tests/common",
+]
+# The Parley example and benches are excluded from the workspace as their dependencies require a newer
+# Rust version than Taffy's MSRV
+exclude = ["examples/parley", "benches"]

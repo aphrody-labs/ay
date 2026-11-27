@@ -1,0 +1,113 @@
+// Copyright (c) 2026 Cloudflare, Inc.
+// Licensed under the Apache 2.0 license found in the LICENSE file or at:
+// https://opensource.org/licenses/Apache-2.0
+
+// Releases wasm DOM handles for frames and targets without importing the core module.
+
+import type { FrameState, TargetState } from "./types.ts";
+import type { DomHandle } from "../wasm.ts";
+
+// wasm.ts registers the factory so this widely imported release path stays wasm-free.
+let domFactory: ((html: string, baseUrl: string) => DomHandle) | null = null;
+export function setDomFactory(fn: (html: string, baseUrl: string) => DomHandle): void {
+  domFactory = fn;
+}
+
+export function freeDetachedDom(
+  dom: DomHandle,
+  tag: string,
+  detail: Record<string, unknown>,
+): void {
+  try {
+    dom.free();
+  } catch (err) {
+    console.warn(
+      `${tag} ` +
+        JSON.stringify({
+          ...detail,
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        }),
+    );
+  }
+}
+
+export function releaseFrameDom(frame: FrameState): void {
+  // The srcdoc parse input can be large and is never read again once the frame's DOM is released.
+  frame.srcdoc = null;
+  const dom = frame.dom;
+  if (!dom) return;
+  frame.dom = null;
+  const charged = frame.domBytes;
+  if (charged && frame.domBudget) {
+    frame.domBudget.bytes -= charged;
+    frame.domBytes = undefined;
+  }
+  freeDetachedDom(dom, "[kitesurf-iframe]", {
+    event: "frame_dom_free_failed",
+    frameId: frame.frameId,
+    url: frame.url,
+    detached: frame.detached,
+  });
+}
+
+export function releaseTargetDom(target: TargetState): void {
+  const dom = target.dom;
+  // Advance even when empty; a screenshot may still hold the previous handle.
+  target.domEpoch += 1;
+  if (!dom) return;
+  target.dom = null;
+  freeDetachedDom(dom, "[kitesurf-target]", {
+    event: "target_dom_free_failed",
+    targetId: target.targetId,
+    url: target.url,
+  });
+}
+
+export function releaseAllDomHandles(target: TargetState): void {
+  for (const frame of target.frames.values()) releaseFrameDom(frame);
+  releaseTargetDom(target);
+}
+
+// The engine keeps the source only to rehydrate a fallback DOM when PageScript is absent, and a
+// large document's source is a second copy of the page: keep it for small pages, let PageScript
+// own the document once live, and report a retired target's source as gone rather than blank.
+export const MAX_RETAINED_FALLBACK_HTML_CHARS = 1 << 20;
+
+export function releaseFallbackHtml(target: TargetState): void {
+  if (target.html.length > MAX_RETAINED_FALLBACK_HTML_CHARS) {
+    target.html = "";
+    target.fallbackHtmlReleased = true;
+  }
+}
+
+// The explanation every read gives once the source is gone, so a released document is never
+// reported as an empty one.
+export function releasedFallbackError(method: string): Error {
+  return new Error(
+    `${method} failed: this target's document source was released after a PageScript failure; navigate again`,
+  );
+}
+
+export function ensureTargetDom(target: TargetState): DomHandle | null {
+  if (target.dom) return target.dom;
+  if (!target.html || !domFactory) return null;
+  try {
+    const dom = domFactory(
+      target.html,
+      target.url && /^https?:/.test(target.url) ? target.url : "https://kitesurf.local/",
+    );
+    target.dom = dom;
+    return dom;
+  } catch (err) {
+    console.warn(
+      "[kitesurf-target] dom_rehydrate_failed " +
+        JSON.stringify({
+          targetId: target.targetId,
+          url: target.url,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+    );
+    return null;
+  }
+}

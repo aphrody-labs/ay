@@ -18,6 +18,10 @@ members = [
     "crates/ztracing",
     "crates/ztracing_macro",
 ]
+exclude = [
+    "engines/labs",
+    "engines/bun",
+]
 
 [workspace.package]
 version = "2026.11.0"

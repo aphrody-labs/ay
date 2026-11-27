@@ -1,0 +1,33 @@
+[package]
+name = "anyrender_serialize"
+description = "Serialization of recorded scenes to a portable zip format"
+version = "0.9.0"
+documentation = "https://docs.rs/anyrender"
+repository = "https://github.com/dioxuslabs/anyrender"
+license = "MIT OR Apache-2.0"
+edition = "2024"
+
+[dependencies]
+anyrender = { workspace = true, features = ["serde"] }
+peniko = { workspace = true }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+zip = { workspace = true }
+sha2 = { workspace = true }
+image = { workspace = true, features = ["png"] }
+skera = { workspace = true }
+read-fonts = { version = "0.46" }
+ttf2woff2 = { workspace = true }
+wuff = { workspace = true }
+
+[dev-dependencies]
+kurbo = { workspace = true }
+peniko = { workspace = true }
+serde_json = { workspace = true }
+wuff = { workspace = true }
+zip = { workspace = true }
+
+[lints.clippy]
+incompatible_msrv = "allow"
+cargo_common_metadata = "allow"

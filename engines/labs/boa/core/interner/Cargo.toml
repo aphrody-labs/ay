@@ -1,0 +1,81 @@
+[package]
+name = "boa_interner"
+description = "String interner for the Boa JavaScript engine."
+keywords = ["javascript", "js", "string", "interner"]
+categories = ["data-structures", "no-std"]
+version = "0.22.0"
+edition = "2024"
+authors = ["boa-dev"]
+license = "Unlicense OR MIT"
+repository = "https://github.com/boa-dev/boa"
+rust-version = "1.100.0"
+
+[features]
+serde = ["dep:serde"]
+arbitrary = ["dep:arbitrary"]
+
+[dependencies]
+boa_macros.workspace = true
+boa_gc.workspace = true
+phf = { workspace = true, default-features = false, features = ["macros"] }
+rustc-hash = { workspace = true, default-features = false }
+static_assertions.workspace = true
+once_cell = { workspace = true, features = ["std"]}
+indexmap.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+hashbrown.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints.rust]
+warnings = "warn"
+missing_docs = "warn"
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_abi = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+non_ascii_idents = "warn"
+noop_method_call = "warn"
+single_use_lifetimes = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_crate_dependencies = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+variant_size_differences = "warn"
+future_incompatible = { level = "warn", priority = -1 }
+let_underscore = { level = "warn", priority = -1 }
+nonstandard_style = { level = "warn", priority = -1 }
+rust_2018_compatibility = { level = "warn", priority = -1 }
+rust_2018_idioms = { level = "warn", priority = -1 }
+rust_2021_compatibility = { level = "warn", priority = -1 }
+unused = { level = "warn", priority = -1 }
+
+[lints.rustdoc]
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "warn"
+missing_crate_level_docs = "warn"
+private_doc_tests = "warn"
+invalid_codeblock_attributes = "warn"
+invalid_rust_codeblocks = "warn"
+bare_urls = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+all = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+incompatible_msrv = "allow"
+cargo_common_metadata = "allow"

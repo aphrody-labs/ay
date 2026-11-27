@@ -1,0 +1,19 @@
+[package]
+name = "bunnymark"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+kurbo = { workspace = true }
+winit = { version = "0.30.2", features = ["rwh_06"] }
+peniko = { workspace = true }
+image = { workspace = true, features = ["png"] }
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true, features = ["log_frame_times"] }
+anyrender_vello_gpu = { workspace = true, features = ["log_frame_times"] }
+anyrender_vello_cpu = { workspace = true, features = ["pixels_window_renderer", "multithreading", "log_frame_times"] }
+anyrender_skia = { workspace = true, features = ["log_frame_times"] }
+pixels_window_renderer = { workspace = true }
+fastrand = "2.3"

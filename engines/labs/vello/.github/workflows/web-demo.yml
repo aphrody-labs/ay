@@ -1,0 +1,88 @@
+name: Web Demo Update
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  release-web:
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    if: github.repository == 'linebender/vello'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: install wasm-bindgen
+        uses: taiki-e/install-action@v2
+        with:
+          # If updating, also update in research/examples/with_winit/Cargo.toml
+          tool: wasm-bindgen@0.2.115
+
+      - name: build Direct WebGL2 demo (wasm)
+        run: cargo build -p native_webgl --bin native_webgl --release --target wasm32-unknown-unknown
+
+      - name: build WebGL2 via wgpu demo (wasm)
+        run: cargo build -p wgpu_webgl --bin wgpu_webgl --release --target wasm32-unknown-unknown
+
+      - name: build WebGPU via wgpu demo (wasm)
+        run: cargo build -p wgpu_webgpu --bin wgpu_webgpu --release --target wasm32-unknown-unknown
+
+      - name: build Vello CPU demo (wasm)
+        run: cargo build -p wasm_cpu --bin wasm_cpu --release --target wasm32-unknown-unknown
+
+      - name: build research demo (wasm)
+        run: cargo build -p with_winit --bin with_winit_bin --release --target wasm32-unknown-unknown
+
+      - name: package Direct WebGL2 demo
+        run: |
+          mkdir public
+          wasm-bindgen --target web --out-dir public target/wasm32-unknown-unknown/release/native_webgl.wasm --no-typescript
+          cp .github/web-demo/native-webgl.html public/index.html
+
+      - name: package WebGL2 via wgpu demo
+        run: |
+          mkdir public/wgpu-webgl
+          wasm-bindgen --target web --out-dir public/wgpu-webgl target/wasm32-unknown-unknown/release/wgpu_webgl.wasm --no-typescript
+          cp .github/web-demo/wgpu-webgl.html public/wgpu-webgl/index.html
+
+      - name: package WebGPU via wgpu demo
+        run: |
+          mkdir public/wgpu-webgpu
+          wasm-bindgen --target web --out-dir public/wgpu-webgpu target/wasm32-unknown-unknown/release/wgpu_webgpu.wasm --no-typescript
+          cp .github/web-demo/wgpu-webgpu.html public/wgpu-webgpu/index.html
+
+      - name: package Vello CPU demo
+        run: |
+          mkdir public/cpu
+          wasm-bindgen --target web --out-dir public/cpu target/wasm32-unknown-unknown/release/wasm_cpu.wasm --no-typescript
+          cp .github/web-demo/vello-cpu.html public/cpu/index.html
+
+      - name: package research demo
+        run: |
+          mkdir public/research
+          wasm-bindgen --target web --out-dir public/research target/wasm32-unknown-unknown/release/with_winit_bin.wasm --no-typescript
+          cp .github/web-demo/research.html public/research/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

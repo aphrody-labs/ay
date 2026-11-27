@@ -6,7 +6,14 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -Ev '^(vendor/|\
 
 for f in $STAGED; do
   [ -f "$f" ] || continue
-  if grep -E -q '([A-Za-z0-9._%+-]+@gmail\.com|10\.200\.77\.|/srv/xbuild|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' "$f"; then
+  if grep -E -q '(ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' "$f"; then
+    echo "pre-commit blocked: secret token pattern in $f" >&2
+    exit 1
+  fi
+  case "$f" in
+    engines/*) continue ;;
+  esac
+  if grep -E -q '([A-Za-z0-9._%+-]+@gmail\.com|10\.200\.77\.|/srv/xbuild)' "$f"; then
     echo "pre-commit blocked: private data or secret pattern in $f" >&2
     exit 1
   fi

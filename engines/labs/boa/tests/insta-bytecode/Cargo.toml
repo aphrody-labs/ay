@@ -1,0 +1,100 @@
+[package]
+name = "insta-bytecode"
+publish = false
+version = "0.22.0"
+edition = "2024"
+
+[dev-dependencies]
+boa_engine = { workspace = true }
+insta = { workspace = true, features = ["filters", "glob"] }
+
+[lints.rust]
+warnings = "warn"
+missing_docs = "warn"
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_abi = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+non_ascii_idents = "warn"
+noop_method_call = "warn"
+single_use_lifetimes = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_crate_dependencies = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+variant_size_differences = "warn"
+
+[lints.rust.future_incompatible]
+level = "warn"
+priority = -1
+
+[lints.rust.let_underscore]
+level = "warn"
+priority = -1
+
+[lints.rust.nonstandard_style]
+level = "warn"
+priority = -1
+
+[lints.rust.rust_2018_compatibility]
+level = "warn"
+priority = -1
+
+[lints.rust.rust_2018_idioms]
+level = "warn"
+priority = -1
+
+[lints.rust.rust_2021_compatibility]
+level = "warn"
+priority = -1
+
+[lints.rust.unused]
+level = "warn"
+priority = -1
+
+[lints.rustdoc]
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "warn"
+missing_crate_level_docs = "warn"
+private_doc_tests = "warn"
+invalid_codeblock_attributes = "warn"
+invalid_rust_codeblocks = "warn"
+bare_urls = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+[lints.clippy.all]
+level = "warn"
+priority = -1
+
+[lints.clippy.correctness]
+level = "warn"
+priority = -1
+
+[lints.clippy.suspicious]
+level = "warn"
+priority = -1
+
+[lints.clippy.style]
+level = "warn"
+priority = -1
+
+[lints.clippy.complexity]
+level = "warn"
+priority = -1
+
+[lints.clippy.perf]
+level = "warn"
+priority = -1
+
+[lints.clippy.pedantic]
+level = "warn"
+priority = -1
