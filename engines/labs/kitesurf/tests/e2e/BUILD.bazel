@@ -1,4 +1,0 @@
-test_suite(
-    name = "gate",
-    tests = ["//packages/engine/test/e2e:gate"],
-)

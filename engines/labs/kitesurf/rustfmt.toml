@@ -1,3 +1,0 @@
-# Preserve written import and module order; use rustfmt defaults otherwise.
-reorder_imports = false
-reorder_modules = false

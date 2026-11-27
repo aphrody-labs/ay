@@ -1,5 +1,0 @@
-# bun-boa links no C++: clang (the C driver, so no libstdc++) driving wild, the Rust linker.
-# x86-64-v3 is what every cluster host runs (Haswell n1/n3, Zen 4 n2), as CachyOS's v3 repositories.
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = ["-C", "link-arg=--ld-path=/usr/local/bin/wild", "-C", "target-cpu=x86-64-v3"]

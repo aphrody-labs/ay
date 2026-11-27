@@ -1,8 +1,0 @@
-# Input
-Width(Pixels(10000)).Height(Pixels(100)).Horizontal()
-{
-    Repeat(15000)
-    {
-        Width(Expand(1)).Height(Expand) {}
-    }
-}

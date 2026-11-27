@@ -1,3 +1,0 @@
-# foo
-cmd
-# bar

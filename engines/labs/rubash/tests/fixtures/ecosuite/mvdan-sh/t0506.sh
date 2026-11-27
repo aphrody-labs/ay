@@ -1,3 +1,0 @@
-<<EOF | b
-foo
-EOF

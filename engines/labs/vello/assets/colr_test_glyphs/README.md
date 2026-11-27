@@ -1,1 +1,0 @@
-Font is taken from https://github.com/googlefonts/color-fonts

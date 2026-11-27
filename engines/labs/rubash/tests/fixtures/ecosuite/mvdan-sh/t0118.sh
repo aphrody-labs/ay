@@ -1,3 +1,0 @@
-foo <<FOOBAR
-bar
-FOOBAR

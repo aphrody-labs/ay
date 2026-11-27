@@ -1,4 +1,0 @@
-@test 'desc' {
-	multiple
-	statements
-}

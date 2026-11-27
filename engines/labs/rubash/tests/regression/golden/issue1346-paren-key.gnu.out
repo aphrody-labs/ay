@@ -1,4 +1,0 @@
-rc=0
-declare -A h=(["(x)"]="v" [a]="1" )
-get:v
-declare -A g=([z]="q" ["(y)"]="w" )

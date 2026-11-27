@@ -1,3 +1,0 @@
-[submodule "third_party/bash"]
-	path = third_party/bash
-	url = https://github.com/caomengxuan666/bash-source-mirror.git

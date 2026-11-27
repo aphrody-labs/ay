@@ -1,1 +1,0 @@
-coproc name foo | bar

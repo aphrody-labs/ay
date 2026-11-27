@@ -1,6 +1,0 @@
-ignore_directories([
-    "**/node_modules",
-    "**/target",
-    ".wpt",
-    "**/.wrangler",
-])

@@ -1,8 +1,0 @@
-# Input
-Width(Pixels(1000)).Height(Pixels(1000)).Vertical()
-{
-    Repeat(10000)
-    {
-        Width(Percentage(0.5)).Height(Ratio(0.5)) {}
-    }
-}

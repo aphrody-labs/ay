@@ -1,1 +1,0 @@
-foo <<<"spaced input"

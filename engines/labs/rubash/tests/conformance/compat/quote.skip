@@ -1,3 +1,0 @@
-# Platform noise: bash=127, rubash=2 (rubash better)
-# These are not rubash bugs - bash fails due to missing tools or timeout differences
-# SKIP this test in conformance suite
