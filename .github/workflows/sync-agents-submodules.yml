@@ -1,0 +1,39 @@
+name: Sync Agents Submodules
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  repository_dispatch:
+    types: [agents-submodules-updated]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-agents-submodules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+      - name: Update .agents/skills and .agents/plugins submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --remote --depth 1 .agents/skills .agents/plugins
+      - name: Commit and push updated submodule pointers
+        run: |
+          if git diff --quiet -- .agents/skills .agents/plugins; then
+            echo "Submodules already up to date."
+            exit 0
+          fi
+          git config user.name "aphrody-bot[bot]"
+          git config user.email "bot@aphrody.com"
+          git add .agents/skills .agents/plugins
+          git commit -m "agents: auto-sync .agents/skills and .agents/plugins submodules"
+          git push origin HEAD:main
