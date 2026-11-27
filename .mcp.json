@@ -1,0 +1,10 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/mcp-config.json",
+  "mcpServers": {
+    "aphrody-kb": {
+      "type": "http",
+      "url": "https://kb.aphrody.com/mcp",
+      "description": "Aphrody Labs shared versioned Cloudflare Knowledge Base MCP (R2-backed)"
+    }
+  }
+}
