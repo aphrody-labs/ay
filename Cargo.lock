@@ -772,6 +772,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bun_highway"
+version = "2026.11.0"
+dependencies = [
+ "bstr",
+]
+
+[[package]]
 name = "bun_histogram"
 version = "2026.11.0"
 
@@ -781,6 +788,13 @@ version = "2026.11.0"
 dependencies = [
  "bun_wyhash",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "bun_icu_data"
+version = "2026.11.0"
+dependencies = [
+ "bun_zstd_decoder",
 ]
 
 [[package]]
@@ -814,6 +828,13 @@ version = "2026.11.0"
 [[package]]
 name = "bun_wyhash"
 version = "2026.11.0"
+
+[[package]]
+name = "bun_zstd_decoder"
+version = "2026.11.0"
+dependencies = [
+ "bun_highway",
+]
 
 [[package]]
 name = "byteorder"

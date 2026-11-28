@@ -69,8 +69,11 @@ backtrace = "0.3"
 base64 = "0.22"
 bitflags = "2.6.0"
 brush-parser = "0.3"
+bstr = { version = "1", default-features = false, features = ["alloc"] }
+bun_highway = { path = "crates/bun_highway" }
 bun_output_tags = { path = "crates/bun_output_tags" }
 bun_windows_sys = { path = "crates/bun_windows_sys" }
+bun_zstd_decoder = { path = "crates/bun_zstd_decoder" }
 bytes = "1.0"
 chardetng = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
