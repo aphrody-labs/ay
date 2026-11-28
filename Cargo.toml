@@ -5,6 +5,7 @@ members = [
     "crates/ay_cli",
     "crates/ay_core",
     "crates/ay_craft",
+    "crates/ay_depot",
     "crates/ay_design",
     "crates/ay_macros",
     "crates/ay_net",
