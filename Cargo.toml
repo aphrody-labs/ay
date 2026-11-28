@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/ay",
+    "crates/ay_bridge",
     "crates/ay_cli",
     "crates/ay_core",
     "crates/ay_craft",

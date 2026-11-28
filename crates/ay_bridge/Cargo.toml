@@ -1,0 +1,15 @@
+[package]
+name = "ay_bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zero-copy WSL <-> Windows kernel/WSLg/Wayland/Vulkan/DirectX12/Win32 bridge probe and path translator."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
