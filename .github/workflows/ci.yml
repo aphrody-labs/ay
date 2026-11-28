@@ -25,4 +25,5 @@ jobs:
   hygiene:
     uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-hygiene-ci.yml@main
     with:
+      repo_name: "ay"
       run_gitleaks: true
