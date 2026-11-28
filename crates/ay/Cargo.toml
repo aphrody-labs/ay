@@ -11,10 +11,13 @@ doctest = false
 
 [dependencies]
 aphrody-core = { workspace = true }
+ay_bridge = { workspace = true }
 ay_depot = { workspace = true }
 ay_net = { workspace = true }
+bun_histogram = { workspace = true }
 bun_hpack = { workspace = true }
 bun_wyhash = { workspace = true }
+collections = { workspace = true }
 pingora-ketama = { workspace = true }
 rope = { workspace = true }
 sum_tree = { workspace = true }

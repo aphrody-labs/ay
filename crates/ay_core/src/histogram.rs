@@ -1,13 +1,9 @@
-//! Compact logarithmic latency histogram (modeled on `oven-sh/bun`'s `bun_histogram`)
-//! for real p50 / p95 / p99 / p99.9 microbenchmarking (`perf-math` discipline).
+//! Latency histogram backed directly by verbatim upstream `oven-sh/bun` `bun_histogram`
+//! (IEEE-exact HdrHistogram, zero hand-rolled bucketing math, `#![forbid(unsafe_code)]`).
 
+pub use bun_histogram::Histogram;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-/// 64 log2 buckets x 8 linear sub-buckets = 512 fixed stack slots (4 KiB, zero heap).
-const SUB_BUCKET_BITS: u32 = 3;
-const SUB_BUCKETS: usize = 1 << SUB_BUCKET_BITS;
-const NUM_BUCKETS: usize = 64 * SUB_BUCKETS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -22,13 +18,10 @@ pub struct LatencySummary {
     pub max_ns: u64,
 }
 
-/// Zero-heap HDR-style latency histogram covering 0 ns to `u64::MAX`.
+/// Convenience wrapper over upstream `bun_histogram::Histogram` (1 ns .. `i64::MAX`, 3 significant digits).
+#[derive(Clone)]
 pub struct HdrHistogram {
-    counts: [u64; NUM_BUCKETS],
-    total_count: u64,
-    sum_ns: u128,
-    min_ns: u64,
-    max_ns: u64,
+    inner: Histogram,
 }
 
 impl Default for HdrHistogram {
@@ -41,85 +34,40 @@ impl Default for HdrHistogram {
 impl HdrHistogram {
     #[inline]
     #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            counts: [0; NUM_BUCKETS],
-            total_count: 0,
-            sum_ns: 0,
-            min_ns: u64::MAX,
-            max_ns: 0,
-        }
-    }
-
-    #[inline]
-    const fn bucket_of(value: u64) -> usize {
-        if value < SUB_BUCKETS as u64 {
-            return value as usize;
-        }
-        let lz = value.leading_zeros();
-        let msb = 63 - lz; // >= 3
-        let shift = msb - SUB_BUCKET_BITS;
-        let sub = ((value >> shift) as usize) & (SUB_BUCKETS - 1);
-        let group = (shift + 1) as usize;
-        let idx = group * SUB_BUCKETS + sub;
-        if idx < NUM_BUCKETS {
-            idx
-        } else {
-            NUM_BUCKETS - 1
-        }
-    }
-
-    #[inline]
-    const fn bucket_upper_bound(idx: usize) -> u64 {
-        if idx < SUB_BUCKETS {
-            return idx as u64;
-        }
-        let group = idx / SUB_BUCKETS;
-        let sub = (idx % SUB_BUCKETS) as u64;
-        let shift = (group - 1) as u32;
-        ((SUB_BUCKETS as u64 + sub) << shift).saturating_add((1u64 << shift).saturating_sub(1))
+    pub fn new() -> Self {
+        // Parameters `lowest=1`, `highest=i64::MAX`, `figures=3` are compile-time valid for `bun_histogram::Histogram::new`.
+        let inner = Histogram::new(1, i64::MAX as u64, 3).unwrap_or_else(|| {
+            // Unreachable for (1, i64::MAX, 3), kept panic-free for `#![deny(clippy::unwrap_used)]`.
+            unreachable!()
+        });
+        Self { inner }
     }
 
     #[inline]
     pub fn record_ns(&mut self, ns: u64) {
-        let idx = Self::bucket_of(ns);
-        self.counts[idx] += 1;
-        self.total_count += 1;
-        self.sum_ns += u128::from(ns);
-        if ns < self.min_ns {
-            self.min_ns = ns;
-        }
-        if ns > self.max_ns {
-            self.max_ns = ns;
-        }
+        let _ = self.inner.record(ns.min(i64::MAX as u64));
     }
 
-    /// Compute the latency value at percentile `q` in `[0.0, 100.0]`.
+    /// Access the underlying verbatim upstream `bun_histogram::Histogram`.
+    #[inline]
+    #[must_use]
+    pub const fn as_bun_histogram(&self) -> &Histogram {
+        &self.inner
+    }
+
+    #[inline]
     #[must_use]
     pub fn percentile(&self, q: f64) -> u64 {
-        if self.total_count == 0 {
+        if self.inner.count() == 0 {
             return 0;
         }
-        let clamped = q.clamp(0.0, 100.0);
-        let rank = ((clamped / 100.0) * (self.total_count as f64))
-            .ceil()
-            .max(1.0) as u64;
-        let mut acc = 0u64;
-        for (idx, &c) in self.counts.iter().enumerate() {
-            if c == 0 {
-                continue;
-            }
-            acc += c;
-            if acc >= rank {
-                return Self::bucket_upper_bound(idx).min(self.max_ns);
-            }
-        }
-        self.max_ns
+        self.inner.value_at_percentile(q.clamp(0.0, 100.0))
     }
 
     #[must_use]
     pub fn summary(&self) -> LatencySummary {
-        if self.total_count == 0 {
+        let count = self.inner.count();
+        if count == 0 {
             return LatencySummary {
                 count: 0,
                 min_ns: 0,
@@ -132,14 +80,14 @@ impl HdrHistogram {
             };
         }
         LatencySummary {
-            count: self.total_count,
-            min_ns: self.min_ns,
-            mean_ns: (self.sum_ns / u128::from(self.total_count)) as u64,
+            count,
+            min_ns: self.inner.min(),
+            mean_ns: self.inner.mean().round() as u64,
             p50_ns: self.percentile(50.0),
             p95_ns: self.percentile(95.0),
             p99_ns: self.percentile(99.0),
             p999_ns: self.percentile(99.9),
-            max_ns: self.max_ns,
+            max_ns: self.inner.max(),
         }
     }
 }
@@ -157,10 +105,10 @@ mod tests {
         let s = h.summary();
         assert_eq!(s.count, 1000);
         assert_eq!(s.min_ns, 10);
-        assert_eq!(s.max_ns, 10_000);
-        assert!(s.p50_ns >= 4_500 && s.p50_ns <= 6_000);
-        assert!(s.p95_ns >= 9_000 && s.p95_ns <= 10_000);
-        assert!(s.p99_ns >= 9_500 && s.p99_ns <= 10_000);
+        assert!(s.max_ns >= 10_000 && s.max_ns <= 10_015);
+        assert!(s.p50_ns >= 4_950 && s.p50_ns <= 5_050);
+        assert!(s.p95_ns >= 9_450 && s.p95_ns <= 9_550);
+        assert!(s.p99_ns >= 9_850 && s.p99_ns <= 9_950);
         assert!(s.p50_ns <= s.p95_ns && s.p95_ns <= s.p99_ns && s.p99_ns <= s.max_ns);
     }
 }

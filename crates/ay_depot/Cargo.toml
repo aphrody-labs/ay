@@ -12,6 +12,7 @@ path = "src/ay_depot.rs"
 
 [dependencies]
 bun_wyhash.workspace = true
+packageurl.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 which.workspace = true

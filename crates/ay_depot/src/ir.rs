@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::str::FromStr;
 
+use packageurl::PackageUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -163,69 +165,25 @@ pub struct Purl {
 }
 
 impl Purl {
-    /// Parse a canonical `pkg:<ecosystem>/...` string.
+    /// Parse a canonical `pkg:<ecosystem>/...` string via upstream `packageurl` (ECMA-427 spec).
     pub fn parse(raw: &str) -> Result<Self, DepotError> {
-        let rest = raw
-            .strip_prefix("pkg:")
-            .ok_or_else(|| DepotError::InvalidPurl(raw.to_owned(), "must start with `pkg:`"))?;
-
-        let (before_sub, subpath) = match rest.split_once('#') {
-            Some((l, r)) if !r.is_empty() => (l, Some(r.to_owned())),
-            Some((l, _)) => (l, None),
-            None => (rest, None),
-        };
-
-        let (before_q, qualifiers) = match before_sub.split_once('?') {
-            Some((l, q)) => {
-                let mut map = BTreeMap::new();
-                for pair in q.split('&').filter(|p| !p.is_empty()) {
-                    let (k, v) = pair.split_once('=').ok_or_else(|| {
-                        DepotError::InvalidPurl(raw.to_owned(), "qualifier must be `key=value`")
-                    })?;
-                    if k.is_empty() {
-                        return Err(DepotError::InvalidPurl(
-                            raw.to_owned(),
-                            "empty qualifier key",
-                        ));
-                    }
-                    map.insert(k.to_ascii_lowercase(), v.to_owned());
-                }
-                (l, map)
-            }
-            None => (before_sub, BTreeMap::new()),
-        };
-
-        let (before_ver, version) = match before_q.rsplit_once('@') {
-            Some((l, v)) if !v.is_empty() => (l, Some(v.to_owned())),
-            _ => (before_q, None),
-        };
-
-        let (scheme, path) = before_ver.split_once('/').ok_or_else(|| {
-            DepotError::InvalidPurl(raw.to_owned(), "expected `pkg:<type>/<name>`")
-        })?;
-        let kind = Ecosystem::from_scheme(scheme)
-            .ok_or_else(|| DepotError::UnknownEcosystem(scheme.to_owned()))?;
-
-        let path = path.trim_matches('/');
-        if path.is_empty() {
-            return Err(DepotError::InvalidPurl(
-                raw.to_owned(),
-                "missing package name",
-            ));
-        }
-
-        let (namespace, name) = match path.rsplit_once('/') {
-            Some((ns, n)) if !ns.is_empty() && !n.is_empty() => (Some(ns.to_owned()), n.to_owned()),
-            _ => (None, path.to_owned()),
-        };
+        let parsed = PackageUrl::from_str(raw)
+            .map_err(|_| DepotError::InvalidPurl(raw.to_owned(), "invalid ECMA-427 Package URL"))?;
+        let kind = Ecosystem::from_scheme(parsed.ty())
+            .ok_or_else(|| DepotError::UnknownEcosystem(parsed.ty().to_owned()))?;
+        let qualifiers: BTreeMap<String, String> = parsed
+            .qualifiers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
 
         Ok(Self {
             kind,
-            namespace,
-            name,
-            version,
+            namespace: parsed.namespace().map(str::to_owned),
+            name: parsed.name().to_owned(),
+            version: parsed.version().map(str::to_owned),
             qualifiers,
-            subpath,
+            subpath: parsed.subpath().map(str::to_owned),
         })
     }
 

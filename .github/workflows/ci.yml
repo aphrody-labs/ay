@@ -19,8 +19,8 @@ jobs:
     with:
       toolchain: "nightly-2026-11-14"
       run_cargo_deny: true
-      test_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_wyhash -p bun_hpack"
-      clippy_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_wyhash -p bun_hpack --all-targets"
+      test_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_histogram -p bun_hpack -p bun_wyhash -p collections"
+      clippy_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_histogram -p bun_hpack -p bun_wyhash -p collections --all-targets"
 
   hygiene:
     uses: aphrody-labs/.github/.github/workflows/reusable-hygiene-ci.yml@main

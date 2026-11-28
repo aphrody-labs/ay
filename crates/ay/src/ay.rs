@@ -1,10 +1,13 @@
 //! `ay` — Pure-Rust, zero-WebKit, zero-JSC, zero-UI-bloat high-performance runtime core.
 
 pub use aphrody_core;
+pub use ay_bridge;
 pub use ay_depot;
 pub use ay_net;
+pub use bun_histogram;
 pub use bun_hpack;
 pub use bun_wyhash;
+pub use collections;
 pub use pingora_ketama;
 pub use rope;
 pub use sum_tree;

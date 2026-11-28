@@ -95,6 +95,7 @@ checksum = "2cb931c189b85683d69a5cfad41d4d418671e1ac413dd209f3f2fc31e3cfd902"
 name = "aphrody-core"
 version = "2026.11.0"
 dependencies = [
+ "bun_histogram",
  "bun_wyhash",
  "serde",
  "zerocopy",
@@ -153,10 +154,13 @@ version = "2026.11.0"
 dependencies = [
  "TinyUFO",
  "aphrody-core",
+ "ay_bridge",
  "ay_depot",
  "ay_net",
+ "bun_histogram",
  "bun_hpack",
  "bun_wyhash",
+ "collections",
  "pingora-ketama",
  "rope",
  "sum_tree",
@@ -189,6 +193,7 @@ name = "ay_depot"
 version = "2026.11.0"
 dependencies = [
  "bun_wyhash",
+ "packageurl",
  "serde",
  "thiserror",
  "which",
@@ -234,6 +239,10 @@ name = "bumpalo"
 version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
+
+[[package]]
+name = "bun_histogram"
+version = "2026.11.0"
 
 [[package]]
 name = "bun_hpack"
@@ -317,6 +326,15 @@ name = "clap_lex"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
+
+[[package]]
+name = "collections"
+version = "2026.11.0"
+dependencies = [
+ "gpui_util",
+ "indexmap",
+ "rustc-hash",
+]
 
 [[package]]
 name = "colorchoice"
@@ -658,6 +676,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexmap"
+version = "2.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+dependencies = [
+ "equivalent",
+ "hashbrown",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -776,6 +804,16 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "packageurl"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7719f5f3fc6fbf28f1b6b3d1cddd43958116db8f2e6c97e520757fbb490fcbf"
+dependencies = [
+ "percent-encoding",
+ "thiserror",
+]
 
 [[package]]
 name = "parking_lot"
