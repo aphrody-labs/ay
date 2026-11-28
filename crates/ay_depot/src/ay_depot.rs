@@ -1,9 +1,14 @@
 //! Tuned Rust-lang depot tools, universal 10-ecosystem package IR & zero-copy `depot.lock`,
 //! Nix+CachyOS conflict auditor, `Cargo.lock` zero-JS-engine audit, and docs-provider catalog (`#![forbid(unsafe_code)]`).
 
+pub mod chromium_depot;
 pub mod ir;
 pub mod lockfile;
 pub mod nix_cachyos;
+
+pub use chromium_depot::{
+    CHROMIUM_DEPOT_SUBSYSTEMS, CHROMIUM_SURFACE_MAGIC, ChromiumSubsystemSpec, ChromiumSurfaceDesc,
+};
 
 pub use ir::{ActionPlane, BackendProbe, DepotError, Ecosystem, Purl, probe_all_backends};
 pub use lockfile::{
