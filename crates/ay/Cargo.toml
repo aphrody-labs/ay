@@ -11,14 +11,10 @@ doctest = false
 
 [dependencies]
 aphrody-core = { workspace = true }
-aphrody-craft = { workspace = true, default-features = false, features = ["codecs", "brand"] }
-ay_macros = { workspace = true }
+ay_depot = { workspace = true }
 ay_net = { workspace = true }
-ay_ui = { workspace = true }
-blitz-traits = { workspace = true }
 bun_hpack = { workspace = true }
 bun_wyhash = { workspace = true }
-design-engine = { workspace = true, default-features = false }
 pingora-ketama = { workspace = true }
 rope = { workspace = true }
 sum_tree = { workspace = true }

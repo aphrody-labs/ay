@@ -39,10 +39,8 @@ impl OutputFormat {
     }
 }
 
-pub const GREEN_BOLD: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
 pub const CYAN_BOLD: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
 pub const RED_BOLD: Style = AnsiColor::Red.on_default().effects(Effects::BOLD);
-pub const DIM: Style = clap::builder::styling::Ansi256Color(244).on_default();
 
 #[derive(Serialize)]
 pub struct CliError {

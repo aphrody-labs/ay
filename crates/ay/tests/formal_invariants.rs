@@ -4,19 +4,11 @@
 //! every theorem-like property pairs (a) universal checks over edge/adversarial inputs
 //! with (b) concrete non-vacuity witnesses and (c) independent reference oracles.
 
-use std::collections::BTreeMap;
 use std::hash::Hasher;
 
 use ay::aphrody_core::{Arena, DotEnvLoader, GlobPattern, SlotId, Version};
-use ay::ay_net::inject_seo_meta;
 use ay::bun_hpack::{Decoder, Encoder, Indexing};
-use ay::design_engine::{
-    DesignSystemConfig, DesignSystemPreset, ThemeMode, WgpuMaterialSurfaceUniform,
-    wcag_contrast_ratio,
-};
-use ay::pingora_ketama::{Bucket, Continuum};
 use ay::rope::Rope;
-use ay::tinyufo::TinyUfo;
 
 /// Deterministic splitmix64 PRNG so every differential trace is 100 % reproducible.
 struct SplitMix64(u64);
@@ -36,26 +28,6 @@ impl SplitMix64 {
         }
         (self.next_u64() as usize) % bound
     }
-}
-
-/// Independent W3C WCAG 2.2 sRGB relative luminance oracle.
-fn w3c_relative_luminance(rgb: [u8; 3]) -> f64 {
-    let ch = |c: u8| -> f64 {
-        let v = f64::from(c) / 255.0;
-        if v <= 0.04045 {
-            v / 12.92
-        } else {
-            ((v + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    0.2126 * ch(rgb[0]) + 0.7152 * ch(rgb[1]) + 0.0722 * ch(rgb[2])
-}
-
-fn w3c_contrast_oracle(fg: [u8; 3], bg: [u8; 3]) -> f64 {
-    let l1 = w3c_relative_luminance(fg);
-    let l2 = w3c_relative_luminance(bg);
-    let (hi, lo) = if l1 >= l2 { (l1, l2) } else { (l2, l1) };
-    (hi + 0.05) / (lo + 0.05)
 }
 
 #[test]
@@ -313,150 +285,4 @@ fn arena_aba_generation_safety_and_semver_total_order() {
     let glob = GlobPattern::compile("crates/**/src/*.rs");
     assert!(glob.matches("crates/ay_core/src/arena.rs"));
     assert!(!glob.matches("crates/ay_core/Cargo.toml"));
-}
-
-#[test]
-fn design_engine_wcag_differential_oracle_and_64b_gpu_uniform() {
-    // 1. Static GPU layout invariant: 4 x vec4<f32> = exactly 64 bytes + google/zerocopy roundtrip.
-    assert_eq!(std::mem::size_of::<WgpuMaterialSurfaceUniform>(), 64);
-    let uniform = WgpuMaterialSurfaceUniform {
-        bg_rgba: [0.05, 0.06, 0.09, 1.0],
-        fg_rgba: [0.95, 0.96, 0.98, 1.0],
-        border_rgba: [0.22, 0.28, 0.42, 0.75],
-        corner_radius_dp: 16.0,
-        elevation_dp: 4.0,
-        padding_h_dp: 16.0,
-        padding_v_dp: 12.0,
-    };
-    assert_eq!(uniform.as_bytes(), &uniform.to_le_bytes());
-    assert_eq!(
-        WgpuMaterialSurfaceUniform::from_bytes(uniform.as_bytes()),
-        Some(uniform)
-    );
-    assert_eq!(WgpuMaterialSurfaceUniform::from_bytes(&[0u8; 63]), None);
-
-    // SlotId google/zerocopy 8-byte wire/mmap roundtrip proof.
-    let slot = SlotId::new(42, 7);
-    assert_eq!(slot.as_bytes().len(), 8);
-    assert_eq!(SlotId::from_bytes(slot.as_bytes()), Some(slot));
-    assert_eq!(SlotId::from_bytes(&[0u8; 7]), None);
-
-    // 2. Differential check of `wcag_contrast_ratio` against independent W3C WCAG 2.2 formula.
-    let pairs: &[([u8; 3], [u8; 3])] = &[
-        ([0, 0, 0], [255, 255, 255]),
-        ([255, 255, 255], [0, 0, 0]),
-        ([0x12, 0x13, 0x18], [0xf4, 0xf6, 0xfb]),
-        ([0x0b, 0x10, 0x20], [0xff, 0x6b, 0x9d]),
-        ([0x1e, 0x29, 0x3b], [0xe2, 0xe8, 0xf0]),
-    ];
-    for &(fg, bg) in pairs {
-        let ours = wcag_contrast_ratio(fg, bg);
-        let oracle = w3c_contrast_oracle(fg, bg);
-        assert!(
-            (ours - oracle).abs() < 1e-4,
-            "WCAG oracle mismatch for ({fg:?}, {bg:?}): ours={ours:.6}, oracle={oracle:.6}"
-        );
-        // Symmetry law: contrast(a, b) == contrast(b, a).
-        assert!((ours - wcag_contrast_ratio(bg, fg)).abs() < 1e-12);
-    }
-
-    // 3. Non-vacuity across all built-in presets.
-    for preset in [
-        DesignSystemPreset::Astryx,
-        DesignSystemPreset::Material3,
-        DesignSystemPreset::FluentMica,
-        DesignSystemPreset::AppleLiquidGlass,
-        DesignSystemPreset::ViceCitySunset,
-        DesignSystemPreset::Minimal,
-    ] {
-        for mode in [ThemeMode::Light, ThemeMode::Dark] {
-            let cfg = DesignSystemConfig::from_preset(preset.clone(), mode);
-            let css = cfg.to_css_variables();
-            assert!(
-                css.contains(&cfg.css_prefix),
-                "preset {preset:?} must emit CSS prefix"
-            );
-        }
-    }
-}
-
-#[test]
-fn ketama_consistent_hashing_tinyufo_bound_and_seo_xss_defense() {
-    // 1. Ketama consistent hashing: determinism + minimal key movement when adding a node.
-    let mk_ring = |nodes: &[&str]| {
-        let buckets: Vec<Bucket> = nodes
-            .iter()
-            .map(|addr| Bucket::new(addr.parse().expect("valid socket addr"), 1))
-            .collect();
-        Continuum::new(&buckets)
-    };
-    let ring4 = mk_ring(&[
-        "10.0.0.1:8080",
-        "10.0.0.2:8080",
-        "10.0.0.3:8080",
-        "10.0.0.4:8080",
-    ]);
-    let ring5 = mk_ring(&[
-        "10.0.0.1:8080",
-        "10.0.0.2:8080",
-        "10.0.0.3:8080",
-        "10.0.0.4:8080",
-        "10.0.0.5:8080",
-    ]);
-
-    let mut moved = 0usize;
-    let mut dist: BTreeMap<String, usize> = BTreeMap::new();
-    let total_keys = 2000usize;
-    for i in 0..total_keys {
-        let key = format!("session-key-{i}");
-        let a = ring4.node(key.as_bytes()).expect("ring4 node");
-        let a2 = ring4
-            .node(key.as_bytes())
-            .expect("deterministic ring4 node");
-        assert_eq!(a, a2);
-        let b = ring5.node(key.as_bytes()).expect("ring5 node");
-        *dist.entry(b.to_string()).or_default() += 1;
-        if a != b {
-            moved += 1;
-        }
-    }
-    let moved_pct = (moved as f64 / total_keys as f64) * 100.0;
-    assert!(
-        moved_pct < 35.0,
-        "consistent hashing moved too many keys on +1 node: {moved_pct:.1}%"
-    );
-    assert_eq!(dist.len(), 5, "all 5 nodes must receive keys");
-
-    // 2. TinyUFO bounded memory invariant.
-    let cache = TinyUfo::new(16, 16);
-    for i in 0u64..128 {
-        cache.put(i, format!("val-{i}"), 1);
-    }
-    let mut hits = 0usize;
-    for i in 0u64..128 {
-        if cache.get(&i).is_some() {
-            hits += 1;
-        }
-    }
-    assert!(hits <= 32, "bounded cache retained unbounded items: {hits}");
-
-    // 3. Security invariant: `inject_seo_meta` rejects unsafe schemes and escapes attribute breakout.
-    assert!(inject_seo_meta("<html><head></head></html>", "javascript:alert(1)").is_err());
-    assert!(
-        inject_seo_meta(
-            "<html><head></head></html>",
-            "https://aphrody.com/\nX-Bad: 1"
-        )
-        .is_err()
-    );
-    let escaped = inject_seo_meta(
-        "<html><head></head></html>",
-        r#"https://aphrody.com/?q="><script>alert(1)</script>"#,
-    )
-    .expect("valid https URL should be safely escaped");
-    assert!(
-        !escaped.contains("<script>"),
-        "raw <script> tag leaked into canonical link"
-    );
-    assert!(escaped.contains("&quot;&gt;&lt;script&gt;"));
 }

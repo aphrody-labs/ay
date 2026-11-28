@@ -1,11 +1,11 @@
+//! Pure high-performance HTTP/edge networking core (`axum` + `lol_html` + `bun_hpack` + `bun_wyhash` + `pingora_ketama` + `tinyufo`).
+
 use axum::{
     Json, Router,
-    extract::Query,
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
-    routing::{get, post},
+    response::{IntoResponse, Response},
+    routing::get,
 };
-use design_engine::DesignSystemPreset;
 use lol_html::{HtmlRewriter, Settings, element};
 use serde::{Deserialize, Serialize};
 
@@ -62,8 +62,7 @@ fn escape_html_attr(raw: &str) -> String {
     out
 }
 
-/// Zero-copy streaming HTML rewriter backed by Cloudflare `lol_html` 3.x (from crates.io).
-/// Fails closed on non-HTTP(S) schemes or control characters and escapes attribute metacharacters.
+/// Zero-copy streaming HTML rewriter backed by Cloudflare `lol_html` 3.x.
 pub fn inject_seo_meta(html: &str, canonical_url: &str) -> Result<String, ApiError> {
     let trimmed = canonical_url.trim();
     if !(trimmed.starts_with("https://") || trimmed.starts_with("http://"))
@@ -108,9 +107,16 @@ pub fn inject_seo_meta(html: &str, canonical_url: &str) -> Result<String, ApiErr
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct PresetQuery {
-    preset: Option<String>,
+async fn health() -> (HeaderMap, Json<serde_json::Value>) {
+    (
+        wasm_webgpu_headers(),
+        Json(serde_json::json!({
+            "ok": true,
+            "runtime": "ay",
+            "webkit": false,
+            "jsc": false
+        })),
+    )
 }
 
 async fn robots_txt() -> &'static str {
@@ -118,18 +124,18 @@ async fn robots_txt() -> &'static str {
 }
 
 async fn llms_txt() -> &'static str {
-    "# ay\n\n> Native GPUI, Bun, Blitz, and Axum platform.\n\n- GET /v1/models\n- POST /v1/agui/materialize\n- GET /.well-known/agent.json\n"
+    "# ay\n\n> Pure-Rust zero-WebKit runtime & edge networking core.\n\n- GET /health\n- GET /v1/models\n- GET /.well-known/agent.json\n"
 }
 
 async fn agent_card() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "name": "ay",
         "protocol": "a2a/1.0",
-        "capabilities": ["agui", "ssr", "openai", "wasm-webgpu"],
+        "capabilities": ["http", "hpack", "ketama", "tinyufo", "wasm-webgpu-headers"],
         "endpoints": {
+            "health": "/health",
             "llms": "/llms.txt",
-            "models": "/v1/models",
-            "materialize": "/v1/agui/materialize"
+            "models": "/v1/models"
         }
     }))
 }
@@ -144,33 +150,14 @@ async fn openai_models() -> Json<serde_json::Value> {
     }))
 }
 
-async fn materialize_handler(
-    Query(q): Query<PresetQuery>,
-    body: String,
-) -> Result<(HeaderMap, Html<String>), ApiError> {
-    let node = ay_ui::materialize_agui_json(&body).map_err(|e| ApiError {
-        code: e.code,
-        message: e.message,
-        hint: e.hint,
-        status: StatusCode::UNPROCESSABLE_ENTITY,
-    })?;
-    let preset = q
-        .preset
-        .as_deref()
-        .map(DesignSystemPreset::parse)
-        .unwrap_or_default();
-    let html = ay_ui::render_ssr_document("en", "Aphrody", "Live interface", preset, &node);
-    Ok((wasm_webgpu_headers(), Html(html)))
-}
-
-/// Unified `axum 0.8` router shared across desktop/VPS (`tokio`/`gpui_tokio`) and Cloudflare Workers (`worker 0.9`).
+/// Lean `axum 0.8` router shared across desktop/VPS and edge.
 pub fn build_router() -> Router {
     Router::new()
+        .route("/health", get(health))
         .route("/robots.txt", get(robots_txt))
         .route("/llms.txt", get(llms_txt))
         .route("/.well-known/agent.json", get(agent_card))
         .route("/v1/models", get(openai_models))
-        .route("/v1/agui/materialize", post(materialize_handler))
 }
 
 /// Fast consistent-hash + TinyUFO cache key using Bun's Wyhash.
@@ -189,39 +176,24 @@ mod tests {
     fn lol_html_injects_canonical_link() {
         let out = inject_seo_meta(
             "<html><head><title>Hi</title></head><body></body></html>",
-            "https://aphrody.com/",
+            "https://ay.dev/",
         )
         .unwrap();
-        assert!(out.contains(r#"<link rel="canonical" href="https://aphrody.com/">"#));
+        assert!(out.contains(r#"<link rel="canonical" href="https://ay.dev/">"#));
     }
 
     #[tokio::test]
-    async fn router_materializes_valid_agui_and_rejects_invalid_input() {
+    async fn router_serves_health_with_coop_coep_headers() {
         let app = build_router();
-        let bad_req = Request::builder()
-            .method("POST")
-            .uri("/v1/agui/materialize")
-            .body(Body::from(
-                r#"{"id":"x","kind":"button","label":"Go","min_height_dp":12.0}"#,
-            ))
+        let req = Request::builder()
+            .method("GET")
+            .uri("/health")
+            .body(Body::empty())
             .unwrap();
-        let bad_resp = app.clone().oneshot(bad_req).await.unwrap();
-        assert_eq!(bad_resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-
-        let good_req = Request::builder()
-            .method("POST")
-            .uri("/v1/agui/materialize?preset=vice_city_sunset")
-            .body(Body::from(
-                r#"{"id":"x","kind":"button","label":"Explore","min_height_dp":48.0}"#,
-            ))
-            .unwrap();
-        let good_resp = app.oneshot(good_req).await.unwrap();
-        assert_eq!(good_resp.status(), StatusCode::OK);
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            good_resp
-                .headers()
-                .get("cross-origin-opener-policy")
-                .unwrap(),
+            resp.headers().get("cross-origin-opener-policy").unwrap(),
             "same-origin"
         );
     }

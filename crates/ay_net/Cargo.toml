@@ -11,10 +11,8 @@ doctest = false
 
 [dependencies]
 axum = { workspace = true }
-ay_ui = { workspace = true }
 bun_hpack = { workspace = true }
 bun_wyhash = { workspace = true }
-design-engine = { workspace = true, default-features = false }
 http = { workspace = true }
 lol_html = { workspace = true }
 pingora-ketama = { workspace = true }

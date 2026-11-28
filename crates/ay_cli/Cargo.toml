@@ -10,14 +10,10 @@ name = "ay"
 path = "src/main.rs"
 
 [dependencies]
-aphrody-core = { workspace = true }
-aphrody-craft = { workspace = true }
-ay_ui = { workspace = true }
+ay_depot = { workspace = true }
 bun_wyhash = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
-design-engine = { workspace = true }
-qrcode = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 which = { workspace = true }
