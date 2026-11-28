@@ -1,0 +1,44 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run packaging dry-run without publishing"
+        type: boolean
+        default: true
+      auto_tag:
+        description: "Create v<version> tag automatically when not already tagged"
+        type: boolean
+        default: false
+      release_tag:
+        description: "Optional explicit tag override (e.g. v2026.11.1)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-release.yml@main
+    with:
+      toolchain: "nightly-2026-11-14"
+      run_xtask: false
+      publish_crates: true
+      publish_npm: false
+      publish_pypi: false
+      publish_r2: false
+      crates_exclude: ""
+      npm_packages: ""
+      abi_crate: ""
+      auto_tag: ${{ github.event.inputs.auto_tag == 'true' }}
+      release_tag: ${{ github.event.inputs.release_tag }}
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
+    secrets: inherit

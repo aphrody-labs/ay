@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ay-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-rust-ci.yml@main
+    with:
+      toolchain: "nightly-2026-11-14"
+      run_cargo_deny: true
+      test_args: "--workspace"
+      clippy_args: "--workspace --all-targets"
+
+  hygiene:
+    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-hygiene-ci.yml@main
+    with:
+      run_gitleaks: true
