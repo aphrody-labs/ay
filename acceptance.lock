@@ -1,7 +1,7 @@
 {
   "schema": "aphrody.acceptance.lock.v1",
   "repo": "ay",
-  "updatedAt": "2026-11-28T01:07:20.921Z",
+  "updatedAt": "2026-11-28T01:16:36.464Z",
   "toolchain": {
     "rustc": "rustc 1.102.0-nightly (5f4effd57 2026-11-13)",
     "cargo": "cargo 1.102.0-nightly (ede6cefea 2026-11-11)",
@@ -12,7 +12,7 @@
     "Cargo.toml": "b99f6566f8916fe2f853be6626a2decc70a04527a011771e24c067fb93366e88",
     "TRUSTED.toml": "68960e348841612e330f0885feee630eba561d5b1322652550b48798b16ea3f5",
     "crates/ay/tests/formal_invariants.rs": "f79da58e0e966e9235c0a6b76c323623d3de5f75cd8a962e2336137226ea0539",
-    "crates/ay_cli/src/main.rs": "e12d38713dbad2a92c2022d435c86fd23464a26d2f1f842165e27b6cd9978e99",
+    "crates/ay_cli/src/main.rs": "c1ecbdd17ba90db69b83d2b1361c28c7f3182e018fd0c1ec86899c0aac63b533",
     "crates/bun_hpack/tests/codec.rs": "c7a857f2ab0dc7f4dd4e57edae9c86956c595137aedfae31d6386e5e091956aa",
     "crates/ay_core/src/arena.rs": "20c4340b65217d25ea6bb663cf337a3cd8b1e45958d8faac788f065677809169",
     "crates/ay_core/src/bounded.rs": "47fbe5cf2e02d510823a91d9e989509a56745192b9518d9cfbac739fff27a596",

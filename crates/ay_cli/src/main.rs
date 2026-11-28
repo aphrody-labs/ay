@@ -478,7 +478,6 @@ fn find_aphrody_root() -> Option<PathBuf> {
         candidates.push(cwd.clone());
         candidates.push(cwd.join("..").join("aphrody"));
     }
-    candidates.push(PathBuf::from(r"C:\src\aphrody"));
     candidates.into_iter().find(|candidate| {
         candidate.join("Cargo.toml").is_file() && candidate.join("package.json").is_file()
     })
@@ -491,16 +490,7 @@ fn resolve_yoyo_cli(cwd: Option<&Path>, env_root: Option<&Path>) -> Option<PathB
     }
     if let Some(dir) = cwd {
         candidates.push(dir.join("scripts").join("yolo.ts"));
-        candidates.push(dir.join("..").join("yoyo").join("scripts").join("yolo.ts"));
-        candidates.push(
-            dir.join("..")
-                .join("..")
-                .join("yoyo")
-                .join("scripts")
-                .join("yolo.ts"),
-        );
     }
-    candidates.push(PathBuf::from(r"C:\src\yoyo\scripts\yolo.ts"));
     candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
@@ -1341,12 +1331,10 @@ mod tests {
         let found_env = resolve_yoyo_cli(None, Some(&tmp.join("yoyo")));
         assert_eq!(found_env.as_deref(), Some(yolo.as_path()));
 
-        // Resolves via sibling ../yoyo/scripts/yolo.ts
-        let found_sibling = resolve_yoyo_cli(Some(&ay_dir), None);
-        assert_eq!(
-            found_sibling.as_deref().and_then(|p| p.canonicalize().ok()),
-            yolo.canonicalize().ok()
-        );
+        // Resolves locally inside current checkout without cross-repo ../ refs
+        let found_local = resolve_yoyo_cli(Some(&tmp.join("yoyo")), None);
+        assert_eq!(found_local.as_deref(), Some(yolo.as_path()));
+        assert_eq!(resolve_yoyo_cli(Some(&ay_dir), None), None);
 
         // Prefers `bun run dev` when package.json defines scripts.dev
         let (dir1, prog1, args1) =
