@@ -234,9 +234,9 @@ enum Commands {
     /// Print version and pure-Rust runtime metadata.
     Version,
 
-    /// Delegate to the unified Aphrody Bun Super App CLI (`apps/app/cli.ts`).
+    /// Delegate to the unified Yoyo Bun orchestration CLI (`yoyo/scripts/yolo.ts`).
     App {
-        /// Arguments forwarded directly to `aphrody`.
+        /// Arguments forwarded directly to `yolo.ts`.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -470,14 +470,80 @@ fn scan_unsafe_forbid_crates(root: &Path) -> (usize, usize) {
 }
 
 fn find_aphrody_root() -> Option<PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
-    [
-        cwd.clone(),
-        cwd.join("..").join("aphrody"),
-        PathBuf::from(r"C:\src\aphrody"),
-    ]
-    .into_iter()
-    .find(|candidate| candidate.join("apps").join("app").join("cli.ts").is_file())
+    let mut candidates = Vec::new();
+    if let Some(root) = std::env::var_os("APHRODY_ROOT").filter(|v| !v.is_empty()) {
+        candidates.push(PathBuf::from(root));
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.clone());
+        candidates.push(cwd.join("..").join("aphrody"));
+    }
+    candidates.push(PathBuf::from(r"C:\src\aphrody"));
+    candidates.into_iter().find(|candidate| {
+        candidate.join("Cargo.toml").is_file() && candidate.join("package.json").is_file()
+    })
+}
+
+fn resolve_yoyo_cli(cwd: Option<&Path>, env_root: Option<&Path>) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(root) = env_root.filter(|p| !p.as_os_str().is_empty()) {
+        candidates.push(root.join("scripts").join("yolo.ts"));
+    }
+    if let Some(dir) = cwd {
+        candidates.push(dir.join("scripts").join("yolo.ts"));
+        candidates.push(dir.join("..").join("yoyo").join("scripts").join("yolo.ts"));
+        candidates.push(
+            dir.join("..")
+                .join("..")
+                .join("yoyo")
+                .join("scripts")
+                .join("yolo.ts"),
+        );
+    }
+    candidates.push(PathBuf::from(r"C:\src\yoyo\scripts\yolo.ts"));
+    candidates.into_iter().find(|candidate| candidate.is_file())
+}
+
+fn find_yoyo_cli() -> Option<PathBuf> {
+    let cwd = std::env::current_dir().ok();
+    let env_root = std::env::var_os("YOYO_ROOT").map(PathBuf::from);
+    resolve_yoyo_cli(cwd.as_deref(), env_root.as_deref())
+}
+
+fn has_package_dev_script(dir: &Path) -> bool {
+    let Ok(raw) = std::fs::read_to_string(dir.join("package.json")) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    json.get("scripts")
+        .and_then(|s| s.get("dev"))
+        .and_then(serde_json::Value::as_str)
+        .is_some()
+}
+
+fn has_justfile(dir: &Path) -> bool {
+    dir.join("justfile").is_file() || dir.join("Justfile").is_file()
+}
+
+fn resolve_dev_runner(
+    cwd: Option<&Path>,
+    aphrody_root: Option<&Path>,
+) -> Option<(PathBuf, &'static str, Vec<String>)> {
+    for dir in [cwd, aphrody_root].into_iter().flatten() {
+        if has_package_dev_script(dir) {
+            return Some((
+                dir.to_path_buf(),
+                "bun",
+                vec!["run".to_owned(), "dev".to_owned()],
+            ));
+        }
+        if has_justfile(dir) {
+            return Some((dir.to_path_buf(), "just", vec!["dev".to_owned()]));
+        }
+    }
+    None
 }
 
 fn parse_hex_rgb(hex: &str) -> Option<[u8; 3]> {
@@ -491,11 +557,20 @@ fn parse_hex_rgb(hex: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
-fn run_forwarded(program: &str, args: &[String], cwd: Option<&Path>, as_json: bool) -> ExitCode {
+fn run_forwarded_with_env(
+    program: &str,
+    args: &[String],
+    cwd: Option<&Path>,
+    envs: &[(&str, &str)],
+    as_json: bool,
+) -> ExitCode {
     let mut cmd = Command::new(program);
     cmd.args(args);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
+    }
+    for (key, value) in envs {
+        cmd.env(key, value);
     }
     match cmd.status() {
         Ok(s) if s.success() => ExitCode::SUCCESS,
@@ -507,6 +582,10 @@ fn run_forwarded(program: &str, args: &[String], cwd: Option<&Path>, as_json: bo
             as_json,
         ),
     }
+}
+
+fn run_forwarded(program: &str, args: &[String], cwd: Option<&Path>, as_json: bool) -> ExitCode {
+    run_forwarded_with_env(program, args, cwd, &[], as_json)
 }
 
 fn run_aphrody_rust_bin(bin_name: &str, pkg: &str, args: &[String], as_json: bool) -> ExitCode {
@@ -622,26 +701,24 @@ fn main() -> ExitCode {
                 }
                 return ExitCode::SUCCESS;
             }
-            let Some(root) = find_aphrody_root() else {
+            let cwd = std::env::current_dir().ok();
+            let aphrody_root = find_aphrody_root();
+            let Some((root, program, args)) =
+                resolve_dev_runner(cwd.as_deref(), aphrody_root.as_deref())
+            else {
                 return emit_error(
-                    "APHRODY_ROOT_NOT_FOUND",
-                    "could not locate `apps/app/cli.ts` to launch dev server",
-                    "Run `ay dev` from inside `aphrody` or pass `--mobile --url <URL>`",
+                    "DEV_ENTRYPOINT_NOT_FOUND",
+                    "could not locate a `package.json` (`dev` script) or `justfile` (`dev` recipe) to launch dev server",
+                    "Run `ay dev` from a workspace with `bun run dev` or `just dev`, or pass `--mobile --url <URL>`",
                     as_json,
                 );
             };
-            let mut args = vec![
-                "apps/app/cli.ts".to_owned(),
-                "serve".to_owned(),
-                "--host".to_owned(),
-                host,
-                "--port".to_owned(),
-                port.to_string(),
-            ];
+            let port_str = port.to_string();
+            let mut envs = vec![("HOST", host.as_str()), ("PORT", port_str.as_str())];
             if open {
-                args.push("--open".to_owned());
+                envs.push(("OPEN", "1"));
             }
-            run_forwarded("bun", &args, Some(&root), as_json)
+            run_forwarded_with_env(program, &args, Some(&root), &envs, as_json)
         }
 
         Commands::Run { target, args } => {
@@ -1127,7 +1204,7 @@ fn main() -> ExitCode {
                 return emit_error(
                     "MISSING_ACCEPTANCE_LOCK",
                     "acceptance.lock is missing in strict mode",
-                    "Generate baseline lock via `bun run app:gate:lock`",
+                    "Generate or refresh acceptance.lock with SHA-256 digests of TRUSTED.toml entries",
                     as_json,
                 );
             }
@@ -1153,17 +1230,17 @@ fn main() -> ExitCode {
         }
 
         Commands::App { args } => {
-            let Some(root) = find_aphrody_root() else {
+            let Some(script) = find_yoyo_cli() else {
                 return emit_error(
-                    "APHRODY_ROOT_NOT_FOUND",
-                    "could not locate `aphrody` repository (`apps/app/cli.ts`)",
-                    "Run from inside `aphrody` or next to `../aphrody`",
+                    "YOYO_CLI_NOT_FOUND",
+                    "could not locate `yoyo/scripts/yolo.ts`",
+                    "Set `YOYO_ROOT` to your `yoyo` checkout or run next to `../yoyo/scripts/yolo.ts`",
                     as_json,
                 );
             };
-            let mut full = vec!["apps/app/cli.ts".to_owned()];
+            let mut full = vec![script.to_string_lossy().into_owned()];
             full.extend(args);
-            run_forwarded("bun", &full, Some(&root), as_json)
+            run_forwarded("bun", &full, None, as_json)
         }
 
         Commands::Deploy { args } => {
@@ -1235,5 +1312,56 @@ mod tests {
         assert_eq!(p2.path, "C:\\src\\ay\\Cargo.toml");
         assert_eq!(p2.line, Some(10));
         assert_eq!(p2.column, None);
+    }
+
+    #[test]
+    fn resolves_yoyo_cli_and_dev_runner_without_legacy_app_cli() {
+        let tmp = std::env::temp_dir().join(format!("ay_cli_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        let yoyo_scripts = tmp.join("yoyo").join("scripts");
+        let ay_dir = tmp.join("ay");
+        let bun_app = tmp.join("bun_app");
+        let just_app = tmp.join("just_app");
+        std::fs::create_dir_all(&yoyo_scripts).expect("create yoyo scripts");
+        std::fs::create_dir_all(&ay_dir).expect("create ay dir");
+        std::fs::create_dir_all(&bun_app).expect("create bun app dir");
+        std::fs::create_dir_all(&just_app).expect("create just app dir");
+
+        let yolo = yoyo_scripts.join("yolo.ts");
+        std::fs::write(&yolo, "// yolo").expect("write yolo.ts");
+        std::fs::write(
+            bun_app.join("package.json"),
+            r#"{"scripts":{"dev":"bun --hot src/index.ts"}}"#,
+        )
+        .expect("write package.json");
+        std::fs::write(just_app.join("justfile"), "dev:\n\techo ok\n").expect("write justfile");
+
+        // Resolves via $YOYO_ROOT
+        let found_env = resolve_yoyo_cli(None, Some(&tmp.join("yoyo")));
+        assert_eq!(found_env.as_deref(), Some(yolo.as_path()));
+
+        // Resolves via sibling ../yoyo/scripts/yolo.ts
+        let found_sibling = resolve_yoyo_cli(Some(&ay_dir), None);
+        assert_eq!(
+            found_sibling.as_deref().and_then(|p| p.canonicalize().ok()),
+            yolo.canonicalize().ok()
+        );
+
+        // Prefers `bun run dev` when package.json defines scripts.dev
+        let (dir1, prog1, args1) =
+            resolve_dev_runner(Some(&bun_app), None).expect("bun dev runner");
+        assert_eq!(dir1, bun_app);
+        assert_eq!(prog1, "bun");
+        assert_eq!(args1, vec!["run", "dev"]);
+
+        // Falls back to `just dev` when justfile is present
+        let (dir2, prog2, args2) =
+            resolve_dev_runner(Some(&just_app), None).expect("just dev runner");
+        assert_eq!(dir2, just_app);
+        assert_eq!(prog2, "just");
+        assert_eq!(args2, vec!["dev"]);
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

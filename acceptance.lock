@@ -1,18 +1,18 @@
 {
   "schema": "aphrody.acceptance.lock.v1",
   "repo": "ay",
-  "updatedAt": "2026-11-26T11:13:41.213Z",
+  "updatedAt": "2026-11-28T01:07:20.921Z",
   "toolchain": {
     "rustc": "rustc 1.102.0-nightly (5f4effd57 2026-11-13)",
     "cargo": "cargo 1.102.0-nightly (ede6cefea 2026-11-11)",
     "bun": "bun 1.4.6"
   },
   "files": {
-    "Cargo.lock": "29ba16ad6c75fdb3230bfef07fb3f253b68a5f42c34da130a8da74c43d8a6908",
-    "Cargo.toml": "6a866c3f9338f131789c8d5b8ee65d0320d278baa85befd2ac43de6ea04f5f81",
+    "Cargo.lock": "33de2e01d4fe2de5bebf44a975626ed0b7201b15f6f732118d86476ceb497649",
+    "Cargo.toml": "b99f6566f8916fe2f853be6626a2decc70a04527a011771e24c067fb93366e88",
     "TRUSTED.toml": "68960e348841612e330f0885feee630eba561d5b1322652550b48798b16ea3f5",
     "crates/ay/tests/formal_invariants.rs": "f79da58e0e966e9235c0a6b76c323623d3de5f75cd8a962e2336137226ea0539",
-    "crates/ay_cli/src/main.rs": "a1dfc016e5d8867b78d1c2f0c27c160e1c1163f467462307a072294a09e966c2",
+    "crates/ay_cli/src/main.rs": "e12d38713dbad2a92c2022d435c86fd23464a26d2f1f842165e27b6cd9978e99",
     "crates/bun_hpack/tests/codec.rs": "c7a857f2ab0dc7f4dd4e57edae9c86956c595137aedfae31d6386e5e091956aa",
     "crates/ay_core/src/arena.rs": "20c4340b65217d25ea6bb663cf337a3cd8b1e45958d8faac788f065677809169",
     "crates/ay_core/src/bounded.rs": "47fbe5cf2e02d510823a91d9e989509a56745192b9518d9cfbac739fff27a596",
@@ -28,7 +28,7 @@
     "crates/ay_core/src/pod.rs": "3313a875a9e6846ca0d79581dc30e3911c1e189b7512de7400df752bf5b993b8",
     "crates/ay_core/src/semver.rs": "757f0a3505fcaf55f957c6f249c2a3865f53a2d01ac45d2d3495a1fcebac81ba",
     "crates/ay_core/src/wyhash.rs": "f1330f00f8a1f30d097fd6a24a26f87e1d69057fd0afdcc699b349f80b10adaf",
-    "crates/ay_design/src/audit.rs": "1f173b6c3693d1d3f39f4d6a0a9d255e18700cca54f45a964d0acf0ef37be4cd",
+    "crates/ay_design/src/audit.rs": "9a7c5d021ea11c01c9c4c2dc0e479cb6aa92ed701f8b66549ad49abfaa3e0a64",
     "crates/ay_design/src/codegen.rs": "32662509624790e16d51b672e885728e61d22ad04df9ea7c7c6babae7fd05090",
     "crates/ay_design/src/ingest.rs": "71d291a8b752dd1cf0f2bc5da721857e795c7eba22351100ef44d184802156f9",
     "crates/ay_design/src/ir.rs": "fb7c54c375338b54dd327ae842dc007a51d14eaf3892d5405a315a619f32f15f",
