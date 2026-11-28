@@ -9,8 +9,6 @@ use axum::{
 use lol_html::{HtmlRewriter, Settings, element};
 use serde::{Deserialize, Serialize};
 
-pub mod openauth;
-
 pub use bun_hpack;
 pub use pingora_ketama;
 pub use tinyufo;
