@@ -166,12 +166,6 @@ impl Encoder {
     }
 }
 
-impl Default for Encoder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 struct Name<'a> {
     bytes: &'a [u8],
     /// Of the first entry with this name, or 0.

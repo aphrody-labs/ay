@@ -84,12 +84,6 @@ impl Decoder {
     }
 }
 
-impl Default for Decoder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// A string literal (RFC 7541 §5.2).
 #[derive(Clone, Copy)]
 struct Literal<'a> {
@@ -123,7 +117,6 @@ impl<'a> Literal<'a> {
 
 impl<'a> Fields<'a> {
     #[inline(always)]
-    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<Field<'_>>> {
         let Some(&first) = self.rest.split_off_first() else {
             return Ok(None);

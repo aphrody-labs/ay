@@ -2,14 +2,6 @@
 name = "bun_histogram"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Verbatim upstream oven-sh/bun zero-dependency IEEE-exact HdrHistogram (#![forbid(unsafe_code)])."
 
 [lib]
 path = "lib.rs"
-doctest = false
-
-[lints.rust]
-unsafe_code = "forbid"
-warnings = "allow"

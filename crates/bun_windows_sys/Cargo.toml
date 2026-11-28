@@ -1,0 +1,9 @@
+[package]
+name = "bun_windows_sys"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[dependencies]

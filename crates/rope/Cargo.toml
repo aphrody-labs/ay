@@ -2,26 +2,22 @@
 name = "rope"
 version = "0.1.0"
 edition.workspace = true
+publish.workspace = true
 license = "GPL-3.0-or-later"
 
 [lib]
 path = "src/rope.rs"
 doctest = false
-test = false
 
 [dependencies]
-gpui_util = { workspace = true }
-heapless = { workspace = true }
-log = { workspace = true }
-rayon = { workspace = true }
-sum_tree = { workspace = true }
-unicode-segmentation = { workspace = true }
-ztracing = { workspace = true }
+gpui_util.workspace = true
+heapless.workspace = true
+log.workspace = true
+rayon.workspace = true
+sum_tree.workspace = true
+unicode-segmentation.workspace = true
+ztracing.workspace = true
+tracing.workspace = true
 
-[lints.rust]
-unsafe_code = "forbid"
-unexpected_cfgs = "allow"
-warnings = "allow"
-
-[lints.clippy]
-all = "allow"
+[package.metadata.cargo-shear]
+ignored = ["tracing"]

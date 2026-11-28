@@ -1,0 +1,7 @@
+[package]
+name = "bun_sort_by_number"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"

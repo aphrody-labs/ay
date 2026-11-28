@@ -1,0 +1,16 @@
+[package]
+name = "zeta_prompt"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "src/zeta_prompt.rs"
+doctest = false
+
+[dependencies]
+anyhow.workspace = true
+imara-diff.workspace = true
+serde = { workspace = true, features = ["derive"] }
+strum.workspace = true
