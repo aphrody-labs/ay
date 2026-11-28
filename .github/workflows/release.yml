@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   release:
-    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-release.yml@main
+    uses: aphrody-labs/.github/.github/workflows/reusable-release.yml@main
     with:
       toolchain: "nightly-2026-11-14"
       run_xtask: false

@@ -178,7 +178,7 @@ mod tests {
             "<html><head><title>Hi</title></head><body></body></html>",
             "https://ay.dev/",
         )
-        .unwrap();
+        .expect("seo meta injection");
         assert!(out.contains(r#"<link rel="canonical" href="https://ay.dev/">"#));
     }
 
@@ -189,11 +189,13 @@ mod tests {
             .method("GET")
             .uri("/health")
             .body(Body::empty())
-            .unwrap();
-        let resp = app.oneshot(req).await.unwrap();
+            .expect("health request");
+        let resp = app.oneshot(req).await.expect("health response");
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            resp.headers().get("cross-origin-opener-policy").unwrap(),
+            resp.headers()
+                .get("cross-origin-opener-policy")
+                .expect("coop header"),
             "same-origin"
         );
     }

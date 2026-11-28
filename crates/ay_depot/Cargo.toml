@@ -11,7 +11,11 @@ description = "Tuned Rust-lang depot tools, Cargo.lock zero-JS-engine auditor, a
 path = "src/ay_depot.rs"
 
 [dependencies]
+bun_wyhash.workspace = true
 serde.workspace = true
+thiserror.workspace = true
+which.workspace = true
+zerocopy.workspace = true
 
 [lints]
 workspace = true

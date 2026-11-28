@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   automate:
-    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-repo-automation.yml@main
+    uses: aphrody-labs/.github/.github/workflows/reusable-repo-automation.yml@main
     with:
       has_rust: true
       has_bun: false

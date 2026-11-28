@@ -5,7 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Zero-copy WSL <-> Windows kernel/WSLg/Wayland/Vulkan/DirectX12/Win32 bridge probe and path translator."
+description = "Zero-copy WSL/WHPX <-> Windows kernel, Wayland, GPU, Binder, hvsock/AF_VSOCK, and sysctl bridge."
+
+[lib]
+path = "src/ay_bridge.rs"
+
+[[bin]]
+name = "ay_bridge"
+path = "src/main.rs"
 
 [dependencies]
 serde.workspace = true

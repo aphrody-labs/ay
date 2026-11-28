@@ -15,15 +15,15 @@ concurrency:
 
 jobs:
   rust:
-    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-rust-ci.yml@main
+    uses: aphrody-labs/.github/.github/workflows/reusable-rust-ci.yml@main
     with:
       toolchain: "nightly-2026-11-14"
       run_cargo_deny: true
-      test_args: "--workspace"
-      clippy_args: "--workspace --all-targets"
+      test_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_wyhash -p bun_hpack"
+      clippy_args: "-p ay -p ay_bridge -p ay_cli -p ay_depot -p ay_net -p aphrody-core -p bun_wyhash -p bun_hpack --all-targets"
 
   hygiene:
-    uses: aphrody-labs/aphrody-kit/.github/workflows/reusable-hygiene-ci.yml@main
+    uses: aphrody-labs/.github/.github/workflows/reusable-hygiene-ci.yml@main
     with:
       repo_name: "ay"
       run_gitleaks: true

@@ -10,6 +10,7 @@ name = "ay"
 path = "src/main.rs"
 
 [dependencies]
+ay_bridge = { workspace = true }
 ay_depot = { workspace = true }
 bun_wyhash = { workspace = true }
 clap = { workspace = true }

@@ -25,6 +25,7 @@ repository = "https://github.com/aphrody-labs/ay"
 
 [workspace.dependencies]
 # First-party zero-WebKit runtime crates (0 vendor/, 0 third_party/, 0 UI bloat)
+ay_bridge = { path = "crates/ay_bridge" }
 ay_net = { path = "crates/ay_net" }
 ay_depot = { path = "crates/ay_depot" }
 aphrody-core = { path = "crates/ay_core" }
@@ -63,6 +64,10 @@ redundant_imports = "warn"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+panic_in_result_fn = "deny"
+todo = "deny"
+unimplemented = "deny"
 redundant_clone = "deny"
 unnecessary_to_owned = "deny"
 needless_collect = "deny"
